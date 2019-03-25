@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"encoding/binary"
 	"errors"
 	"io"
 	"math/rand"
@@ -12,17 +11,12 @@ import (
 
 type RpcConnection struct {
 	container      *RpcContainer
-	frameContainer FrameContainer
+	frameContainer *FrameContainer
 	con            net.Conn
 	isClosed       int32
 	sendChan       chan *DataFrame
 
-	// 数据的字节序
-	byteOrder binary.ByteOrder
-
 	requestId uint32
-	// 请求超时时间，单位:秒
-	requestExpireTime int64
 }
 
 func (this *RpcConnection) Call(methodName string, responseObj interface{}, requestObj ...interface{}) (err error) {
@@ -53,7 +47,7 @@ func (this *RpcConnection) Go(methodName string, responseObj interface{}, reques
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  []interface{}{responseObj},
-		ExpireTime: this.requestExpireTime,
+		ExpireTime: time.Now().Unix() + this.container.requestExpireSecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
 
@@ -90,7 +84,7 @@ func (this *RpcConnection) receive() {
 		}
 
 		// 获取帧头
-		frameObj := convertHeader(header, this.byteOrder)
+		frameObj := convertHeader(header, this.container.byteOrder)
 		// 是请求帧，但又没有设置请求函数，则代表是非法帧
 		if frameObj.MethodNameLen == 0 && frameObj.ResponseFrameId == 0 {
 			// 跳过错误的帧
@@ -170,7 +164,7 @@ func (this *RpcConnection) send() {
 	for this.isClosed == No {
 		select {
 		case item := <-this.sendChan:
-			_, err = this.con.Write(item.GetHeader(this.byteOrder))
+			_, err = this.con.Write(item.GetHeader(this.container.byteOrder))
 			if err != nil {
 				break
 			}
@@ -223,7 +217,7 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 			return
 		}
 
-		returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.byteOrder) ////todo:需要考虑异步处理
+		returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.container.byteOrder) ////todo:需要考虑异步处理
 		//// 应答
 		responseFrame := newResponseFrame(frameObj, returnBytes, this.getRequestId())
 		if err != nil {
@@ -238,11 +232,12 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 
 func NewRpcConnection(container *RpcContainer, con net.Conn) *RpcConnection {
 	var result = &RpcConnection{
-		container:         container,
-		con:               con,
-		sendChan:          make(chan *DataFrame, 1024),
-		requestId:         rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
-		requestExpireTime: 15,
+		container:      container,
+		frameContainer: newFrameContainer(),
+		con:            con,
+		isClosed:       No,
+		sendChan:       make(chan *DataFrame, 1024),
+		requestId:      rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
 	}
 
 	// 开协程进行具体处理

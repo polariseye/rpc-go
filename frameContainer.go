@@ -128,7 +128,7 @@ func (this *FrameContainer) ReturnAllRequest(err error) {
 	this.data = make(map[uint32]*RequestInfo, 16)
 }
 
-func NewFrameContainer() *FrameContainer {
+func newFrameContainer() *FrameContainer {
 	result := &FrameContainer{
 		data:    make(map[uint32]*RequestInfo, 16),
 		lockObj: sync.RWMutex{},

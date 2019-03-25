@@ -27,7 +27,7 @@ const (
 
 var (
 	RpcConnectionType = reflect.TypeOf((*RpcConnection)(nil))
-	ErrorType         = reflect.TypeOf(error(nil))
+	ErrorType         = reflect.TypeOf((*error)(nil)).Elem() //// 这里必须用指针，否则提示为Nil
 )
 
 var (
