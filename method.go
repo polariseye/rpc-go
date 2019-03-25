@@ -3,53 +3,43 @@ package rpc
 import (
 	"encoding/binary"
 	"reflect"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type MethodInfo struct {
 	MethodName      string
-	FuncObj         *reflect.Value
+	FuncObj         reflect.Value
 	funcParamList   []reflect.Type
 	returnValueList []reflect.Type
 }
 
-type sizer interface {
-	XXX_Size() int
-}
-
-func (this *MethodInfo) Invoke(data []byte, order binary.ByteOrder) ([]byte, error) {
-	valList := make([]reflect.Value, len(this.funcParamList))
-
-	var startByteIndex int = 0
-	var valItem reflect.Value
-	var err error
-	for i := 0; i < len(this.funcParamList); i++ {
-		valItem, startByteIndex, err = this.adjustParam(this.funcParamList[i], data[startByteIndex:])
-		if err != nil {
-			return nil, err
-		}
-
-		valList[i] = valItem
+func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor, data []byte, order binary.ByteOrder) ([]byte, error) {
+	valList, err := convertor.UnMarhsalType(data, this.funcParamList[1:]...)
+	if err != nil {
+		return nil, err
 	}
 
-	returnValList := this.FuncObj.Call(valList)
-
-	return this.convertToBytes(returnValList), nil
-}
-
-func (this *MethodInfo) adjustParam(tp reflect.Type, data []byte) (reflect.Value, int, error) {
-	if tp.Kind() == reflect.Array {
-		return reflect.ValueOf(data), len(data), nil
-	} else {
-		val := reflect.New(tp)
-		obj := val.Interface().(proto.Message)
-		err := proto.Unmarshal(data, obj)
-
-		return val, obj.(sizer).XXX_Size(), err
+	// 组装请求数据
+	var callValList = make([]reflect.Value, len(this.funcParamList))
+	callValList[0] = reflect.ValueOf(connObj)
+	for i := 0; i < len(valList); i++ {
+		callValList[i+1] = reflect.ValueOf(valList[i])
 	}
+
+	returnValList := this.FuncObj.Call(callValList)
+	//// 如果存在错误，则直接返回错误
+	errVal := returnValList[len(returnValList)-1].Interface().(error)
+	if errVal != nil {
+		return nil, errVal
+	}
+
+	return convertor.MarshalType(this.returnValueList, returnValList...)
 }
 
-func (this *MethodInfo) convertToBytes(valList []reflect.Value) []byte {
-	return nil
+func newMethodInfo(methodName string, funcObj reflect.Value, paramList []reflect.Type, returnValList []reflect.Type) *MethodInfo {
+	return &MethodInfo{
+		MethodName:      methodName,
+		FuncObj:         funcObj,
+		funcParamList:   paramList,
+		returnValueList: returnValList,
+	}
 }

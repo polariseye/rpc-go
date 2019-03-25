@@ -1,5 +1,10 @@
 package rpc
 
+import (
+	"errors"
+	"reflect"
+)
+
 const (
 	// 协议头字节
 	HEADER = 0X09
@@ -18,4 +23,18 @@ const (
 
 	// 应答帧
 	TransformType_Response = 1
+)
+
+var (
+	RpcConnectionType = reflect.TypeOf((*RpcConnection)(nil))
+	ErrorType         = reflect.TypeOf(error(nil))
+)
+
+var (
+	TimeoutError = errors.New("timeout")
+)
+
+const (
+	Yes = 1
+	No  = 0
 )

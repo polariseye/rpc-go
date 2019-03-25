@@ -8,67 +8,84 @@ import (
 	"net"
 	"sync/atomic"
 	"time"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type RpcConnection struct {
 	container      *RpcContainer
 	frameContainer FrameContainer
 	con            net.Conn
-	isClosed       bool
+	isClosed       int32
 	sendChan       chan *DataFrame
 
 	// 数据的字节序
 	byteOrder binary.ByteOrder
 
 	requestId uint32
+	// 请求超时时间，单位:秒
+	requestExpireTime int64
 }
 
-func (this *RpcConnection) Call(methodName string, requestMsg proto.Message, responseMsg proto.Message) (err error) {
-	err, downChan := this.Go(methodName, requestMsg, responseMsg)
+func (this *RpcConnection) Call(methodName string, responseObj interface{}, requestObj ...interface{}) (err error) {
+	downChan, err := this.Go(methodName, responseObj, requestObj...)
 	if err != nil {
 		return err
+	}
+
+	if this.isClosed != No {
+		return io.EOF
 	}
 
 	return <-downChan
 }
 
-func (this *RpcConnection) Go(methodName string, requestMsg proto.Message, responseMsg proto.Message) (err error, donChan <-chan error) {
-	var requestBytes []byte
-	if requestMsg != nil {
-		requestBytes, err = proto.Marshal(requestMsg)
+func (this *RpcConnection) Go(methodName string, responseObj interface{}, requestObj ...interface{}) (donChan <-chan error, err error) {
+	requestBytes, err := this.container.getConvertorFunc().MarshalValue(requestObj)
+	if err != nil {
+		return nil, err
+	}
+
+	if this.isClosed != No {
+		return nil, io.EOF
 	}
 
 	// 添加到等待应答的列表中
-	requestObj := &RequestInfo{
-		RequestId: this.getRequestId(),
-		DownChan:  make(chan error, 10),
-		ReturnObj: responseMsg,
+	requestInfoObj := &RequestInfo{
+		RequestId:  this.getRequestId(),
+		DownChan:   make(chan error, 10),
+		ReturnObj:  []interface{}{responseObj},
+		ExpireTime: this.requestExpireTime,
 	}
-	frameObj := newRequestFrame(requestObj, methodName, requestBytes, requestObj.RequestId, true)
+	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
 
-	this.frameContainer.AddRequest(requestObj)
+	this.frameContainer.AddRequest(requestInfoObj)
 	this.sendChan <- frameObj
 
-	return nil, requestObj.DownChan
+	return requestInfoObj.DownChan, nil
 }
 
 func (this *RpcConnection) getRequestId() uint32 {
 	return atomic.AddUint32(&this.requestId, 1)
 }
 
-func (this *RpcConnection) Close() {
+func (this *RpcConnection) Close(err error) {
+	// 设置为已关闭
+	if atomic.CompareAndSwapInt32(&this.isClosed, No, Yes) == false {
+		return
+	}
 
+	// 清空所有请求
+	this.frameContainer.ReturnAllRequest(err)
 }
 
 func (this *RpcConnection) receive() {
+	var err error
+	defer this.Close(err)
+
 	var header = make([]byte, HEADER_LENGTH)
-	for this.isClosed == false {
+	for this.isClosed == No {
 		// 读取包头
-		err := this.receiveHeader(this.con, header)
+		err = this.receiveHeader(this.con, header)
 		if err != nil {
-			this.isClosed = true
 			break
 		}
 
@@ -85,7 +102,6 @@ func (this *RpcConnection) receive() {
 			buffer := make([]byte, frameObj.ContentLength+uint32(frameObj.MethodNameLen))
 			_, err = io.ReadFull(this.con, buffer)
 			if err != nil {
-				this.isClosed = true
 				break
 			}
 		}
@@ -97,7 +113,7 @@ func (this *RpcConnection) receive() {
 
 func (this *RpcConnection) receiveHeader(con net.Conn, header []byte) error {
 	startIndex := 1
-	for this.isClosed == false {
+	for this.isClosed == No {
 		_, err := io.ReadFull(this.con, header[:1])
 		if err != nil {
 			return err
@@ -106,7 +122,7 @@ func (this *RpcConnection) receiveHeader(con net.Conn, header []byte) error {
 			continue
 		}
 
-		for this.isClosed == false {
+		for this.isClosed == No {
 			_, err = io.ReadFull(this.con, header[startIndex:])
 			if err != nil {
 				return err
@@ -133,14 +149,29 @@ func (this *RpcConnection) receiveHeader(con net.Conn, header []byte) error {
 }
 
 func (this *RpcConnection) send() {
-	for this.isClosed == false {
+	// 清空所有请求
+	defer func() {
+		for {
+			select {
+			case item := <-this.sendChan:
+				item.RequestObj.ReturnError(io.EOF)
+				this.frameContainer.RemoveRequestObj(item.RequestObj.RequestId)
+			default:
+				{
+					return
+				}
+			}
+
+		}
+	}()
+	var err error
+	defer this.Close(err)
+
+	for this.isClosed == No {
 		select {
 		case item := <-this.sendChan:
-			_, err := this.con.Write(item.GetHeader(this.byteOrder))
+			_, err = this.con.Write(item.GetHeader(this.byteOrder))
 			if err != nil {
-				item.RequestObj.ErrObj = err
-				item.RequestObj.DownChan <- err
-				this.isClosed = true
 				break
 			}
 
@@ -148,9 +179,6 @@ func (this *RpcConnection) send() {
 				_, err = this.con.Write(item.MethodNameBytes)
 				if err != nil {
 					// 当前包的异常处理
-					item.RequestObj.ErrObj = err
-					item.RequestObj.DownChan <- err
-					this.isClosed = true
 					break
 				}
 			}
@@ -159,13 +187,16 @@ func (this *RpcConnection) send() {
 				_, err = this.con.Write(item.Data)
 				if err != nil {
 					// 当前包的异常处理
-					item.RequestObj.ErrObj = err
-					item.RequestObj.DownChan <- err
-					this.isClosed = true
 					break
 				}
 			}
+		default:
+			{
+				time.Sleep(5 * time.Millisecond)
+			}
 		}
+
+		this.frameContainer.ClearExpireNode()
 	}
 }
 
@@ -180,13 +211,11 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 
 		requestObj.ReturnBytes = frameObj.Data
 		if frameObj.IsError() {
-			requestObj.ErrObj = errors.New(string(frameObj.Data))
-		} else if requestObj.ReturnObj != nil {
-			requestObj.ErrObj = proto.Unmarshal(frameObj.Data, requestObj.ReturnObj.(proto.Message))
+			requestObj.ReturnError(errors.New(string(frameObj.Data)))
+		} else if len(requestObj.ReturnObj) > 0 {
+			tmpErr := this.container.getConvertorFunc().UnMarhsalValue(frameObj.Data, requestObj.ReturnObj)
+			requestObj.Return(requestObj.ReturnObj, frameObj.Data, tmpErr)
 		}
-
-		// 通知完成
-		requestObj.DownChan <- requestObj.ErrObj
 	} else {
 		// 请求处理
 		methodObj, exist := this.container.getMethod(frameObj.MethodName())
@@ -194,10 +223,14 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 			return
 		}
 
-		returnBytes, err := methodObj.Invoke(frameObj.Data, this.byteOrder)
+		returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.byteOrder) ////todo:需要考虑异步处理
+		//// 应答
+		responseFrame := newResponseFrame(frameObj, returnBytes, this.getRequestId())
 		if err != nil {
-
+			// 应答错误处理
+			responseFrame.SetError(err.Error())
 		}
+		this.sendChan <- responseFrame
 	}
 
 	return
@@ -205,9 +238,11 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 
 func NewRpcConnection(container *RpcContainer, con net.Conn) *RpcConnection {
 	var result = &RpcConnection{
-		container: container,
-		con:       con,
-		requestId: rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
+		container:         container,
+		con:               con,
+		sendChan:          make(chan *DataFrame, 1024),
+		requestId:         rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
+		requestExpireTime: 15,
 	}
 
 	// 开协程进行具体处理
