@@ -22,17 +22,18 @@ func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor,
 	var callValList = make([]reflect.Value, len(this.funcParamList))
 	callValList[0] = reflect.ValueOf(connObj)
 	for i := 0; i < len(valList); i++ {
-		callValList[i+1] = reflect.ValueOf(valList[i])
+		callValList[i+1] = valList[i]
 	}
 
 	returnValList := this.FuncObj.Call(callValList)
 	//// 如果存在错误，则直接返回错误
-	errVal := returnValList[len(returnValList)-1].Interface().(error)
-	if errVal != nil {
-		return nil, errVal
+	errVal := returnValList[len(returnValList)-1]
+	if errVal.IsNil() == false {
+		errObj := errVal.Interface().(error)
+		return nil, errObj
 	}
 
-	return convertor.MarshalType(this.returnValueList, returnValList...)
+	return convertor.MarshalType(this.returnValueList, returnValList[:len(returnValList)-1]...)
 }
 
 func newMethodInfo(methodName string, funcObj reflect.Value, paramList []reflect.Type, returnValList []reflect.Type) *MethodInfo {

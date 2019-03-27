@@ -33,7 +33,7 @@ func (this *RpcConnection) Call(methodName string, responseObj interface{}, requ
 }
 
 func (this *RpcConnection) Go(methodName string, responseObj interface{}, requestObj ...interface{}) (donChan <-chan error, err error) {
-	requestBytes, err := this.container.getConvertorFunc().MarshalValue(requestObj)
+	requestBytes, err := this.container.getConvertorFunc().MarshalValue(requestObj...)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +98,8 @@ func (this *RpcConnection) receive() {
 			if err != nil {
 				break
 			}
+
+			frameObj.SetData(buffer)
 		}
 
 		// 处理请求
@@ -207,7 +209,7 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 		if frameObj.IsError() {
 			requestObj.ReturnError(errors.New(string(frameObj.Data)))
 		} else if len(requestObj.ReturnObj) > 0 {
-			tmpErr := this.container.getConvertorFunc().UnMarhsalValue(frameObj.Data, requestObj.ReturnObj)
+			tmpErr := this.container.getConvertorFunc().UnMarhsalValue(frameObj.Data, requestObj.ReturnObj...)
 			requestObj.Return(requestObj.ReturnObj, frameObj.Data, tmpErr)
 		}
 	} else {

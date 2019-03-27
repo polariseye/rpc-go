@@ -96,6 +96,6 @@ func NewRpcContainer(getConvertorFunc func() IByteConvertor) *RpcContainer {
 		funcData:            make(map[string]*MethodInfo, 8),
 		getConvertorFunc:    getConvertorFunc,
 		byteOrder:           binary.BigEndian,
-		requestExpireSecond: 15,
+		requestExpireSecond: 15000,
 	}
 }

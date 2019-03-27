@@ -27,6 +27,7 @@ func (this *DataFrame) IsError() bool {
 func (this *DataFrame) SetError(errMsg string) {
 	this.Data = []byte(errMsg)
 	this.ContentLength = uint32(len(this.Data))
+	this.Flag = this.Flag | 0x04
 }
 
 func (this *DataFrame) IsNeedResponse() bool {
@@ -51,11 +52,11 @@ func (this *DataFrame) GetHeader(order binary.ByteOrder) []byte {
 
 	header[0] = HEADER
 	header[1] = this.Flag
-	header[HEADER_LENGTH-1] = TAIL
 	order.PutUint32(header[2:], this.RequestFrameId)
 	order.PutUint32(header[6:], this.ResponseFrameId)
 	order.PutUint32(header[10:], this.ContentLength)
-	header[15] = this.MethodNameLen
+	header[14] = this.MethodNameLen
+	header[15] = TAIL
 
 	return header
 }
@@ -68,11 +69,11 @@ func convertHeader(header []byte, order binary.ByteOrder) *DataFrame {
 	frameData := &DataFrame{}
 
 	frameData.Flag = header[1]
-	frameData.RequestFrameId = order.Uint32(header[2:4])
-	frameData.ResponseFrameId = order.Uint32(header[6:9])
+	frameData.RequestFrameId = order.Uint32(header[2:6])
+	frameData.ResponseFrameId = order.Uint32(header[6:10])
 
-	frameData.MethodNameLen = header[15]
 	frameData.ContentLength = order.Uint32(header[10:14])
+	frameData.MethodNameLen = header[14]
 
 	return frameData
 }

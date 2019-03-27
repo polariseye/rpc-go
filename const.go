@@ -7,10 +7,10 @@ import (
 
 const (
 	// 协议头字节
-	HEADER = 0X09
+	HEADER byte = 0X09
 
 	// 协议尾
-	TAIL = 0x12
+	TAIL byte = 0x12
 
 	// 协议头字节数
 	HEADER_LENGTH = 16
