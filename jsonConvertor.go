@@ -29,8 +29,8 @@ func (this *JsonConvertor) UnMarhsalType(bytesData []byte, typeList ...reflect.T
 	result := make([]reflect.Value, 0, len(typeList))
 	for _, item := range typeList {
 		valItem := reflect.New(item)
-		valItem = reflect.Indirect(valItem)
 		data = append(data, valItem.Interface())
+		valItem = reflect.Indirect(valItem)
 		result = append(result, valItem)
 	}
 
