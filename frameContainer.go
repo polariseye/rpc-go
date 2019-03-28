@@ -15,7 +15,7 @@ type RequestInfo struct {
 	ErrObj      error
 	ReturnBytes []byte
 
-	// 过期时间点
+	// 过期时间点(单位：毫秒)
 	ExpireTime int64
 }
 
@@ -75,13 +75,13 @@ func (this *FrameContainer) RemoveRequestObj(requestId uint32) {
 }
 
 func (this *FrameContainer) ClearExpireNode() {
-	now := time.Now().Unix()
+	nowMillisecond := time.Now().UnixNano() / 1000000 //// 转换为毫秒
 
 	// 每秒检查一次
-	if (now - this.preCheckTime) < 1 {
+	if (nowMillisecond - this.preCheckTime) < 1 {
 		return
 	}
-	this.preCheckTime = now
+	this.preCheckTime = nowMillisecond
 
 	// 查找过期节点
 	var expireNode []*RequestInfo = nil
@@ -90,7 +90,7 @@ func (this *FrameContainer) ClearExpireNode() {
 		defer this.lockObj.RUnlock()
 
 		for _, item := range this.data {
-			if item.ExpireTime < now {
+			if item.ExpireTime < nowMillisecond {
 				if expireNode == nil {
 					expireNode = make([]*RequestInfo, 0, 8)
 				}
@@ -130,8 +130,9 @@ func (this *FrameContainer) ReturnAllRequest(err error) {
 
 func newFrameContainer() *FrameContainer {
 	result := &FrameContainer{
-		data:    make(map[uint32]*RequestInfo, 16),
-		lockObj: sync.RWMutex{},
+		data:         make(map[uint32]*RequestInfo, 16),
+		lockObj:      sync.RWMutex{},
+		preCheckTime: time.Now().UnixNano() / 1000000,
 	}
 
 	return result

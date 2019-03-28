@@ -105,7 +105,7 @@ func allTst(rpcObj *rpc.RpcConnection) {
 		fmt.Println("global_Hello CallAsyncWithNoResponse : 应答数据:", result)
 	}
 
-	err = rpcObj.CallTimeout("Sample_TimeoutTst", []interface{}{"qqnihao"}, []interface{}{&result}, 3)
+	err = rpcObj.CallTimeout("Sample_TimeoutTst", []interface{}{"qqnihao"}, []interface{}{&result}, 3*1000)
 	if err != nil {
 		fmt.Println("Sample_TimeoutTst CallTimeout 错误信息:", err.Error())
 	} else {

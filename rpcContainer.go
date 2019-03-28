@@ -14,7 +14,7 @@ type RpcContainer struct {
 	getConvertorFunc func() IByteConvertor
 
 	// 请求超时时间
-	requestExpireSecond int64
+	requestExpireMillisecond int64
 
 	// 数据的字节序
 	byteOrder binary.ByteOrder
@@ -120,9 +120,9 @@ func (this *RpcContainer) RecordAllMethod() {
 
 func NewRpcContainer(getConvertorFunc func() IByteConvertor) *RpcContainer {
 	return &RpcContainer{
-		funcData:            make(map[string]*MethodInfo, 8),
-		getConvertorFunc:    getConvertorFunc,
-		byteOrder:           binary.BigEndian,
-		requestExpireSecond: 15000,
+		funcData:                 make(map[string]*MethodInfo, 8),
+		getConvertorFunc:         getConvertorFunc,
+		byteOrder:                binary.BigEndian,
+		requestExpireMillisecond: 2 * 60 * 1000,
 	}
 }

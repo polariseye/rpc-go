@@ -53,7 +53,7 @@ func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  responseObj,
-		ExpireTime: time.Now().Unix() + this.container.requestExpireSecond,
+		ExpireTime: time.Now().UnixNano()/1000000 + this.container.requestExpireMillisecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
 
@@ -81,7 +81,7 @@ func (this *RpcConnection) CallAsyncWithNoResponse(methodName string, requestObj
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  responseObj,
-		ExpireTime: time.Now().Unix() + this.container.requestExpireSecond,
+		ExpireTime: time.Now().UnixNano()/1000000 + this.container.requestExpireMillisecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, false)
 	this.sendChan <- frameObj
@@ -89,8 +89,8 @@ func (this *RpcConnection) CallAsyncWithNoResponse(methodName string, requestObj
 	return nil
 }
 
-func (this *RpcConnection) CallTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireSecond int64) (err error) {
-	downChan, err := this.CallAsyncTimeout(methodName, requestObj, responseObj, expireSecond)
+func (this *RpcConnection) CallTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (err error) {
+	downChan, err := this.CallAsyncTimeout(methodName, requestObj, responseObj, expireMillisecond)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (this *RpcConnection) CallTimeout(methodName string, requestObj []interface
 	return <-downChan
 }
 
-func (this *RpcConnection) CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireSecond int64) (donChan <-chan error, err error) {
+func (this *RpcConnection) CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (donChan <-chan error, err error) {
 	var requestBytes []byte
 	if len(requestObj) > 0 {
 		requestBytes, err = this.container.getConvertorFunc().MarshalValue(requestObj...)
@@ -120,7 +120,7 @@ func (this *RpcConnection) CallAsyncTimeout(methodName string, requestObj []inte
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  responseObj,
-		ExpireTime: time.Now().Unix() + expireSecond,
+		ExpireTime: time.Now().UnixNano()/1000000 + expireMillisecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
 
@@ -173,7 +173,7 @@ func (this *RpcConnection) receive() {
 		frameObj := convertHeader(header, this.container.byteOrder)
 		// 是请求帧，但又没有设置请求函数，则代表是非法帧
 		if frameObj.MethodNameLen == 0 && frameObj.ResponseFrameId == 0 {
-			log.Debug("receive error frame ip:%v", this.Addr())
+			log.Warn("receive error frame ip:%v", this.Addr())
 			// 跳过错误的帧
 			continue
 		}
@@ -244,7 +244,6 @@ func (this *RpcConnection) send() {
 					return
 				}
 			}
-
 		}
 	}()
 	var err error
