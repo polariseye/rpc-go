@@ -21,7 +21,7 @@ type RpcConnection struct {
 }
 
 func (this *RpcConnection) Call(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
-	downChan, err := this.Go(methodName, requestObj, responseObj)
+	downChan, err := this.CallAsync(methodName, requestObj, responseObj)
 	if err != nil {
 		return err
 	}
