@@ -3,6 +3,8 @@ package rpc
 import (
 	"encoding/binary"
 	"reflect"
+
+	"github.com/polariseye/rpc-go/log"
 )
 
 type MethodInfo struct {
@@ -12,10 +14,21 @@ type MethodInfo struct {
 	returnValueList []reflect.Type
 }
 
-func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor, data []byte, order binary.ByteOrder) ([]byte, error) {
-	valList, err := convertor.UnMarhsalType(data, this.funcParamList[1:]...)
-	if err != nil {
-		return nil, err
+func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor, data []byte, order binary.ByteOrder, ifNeedResponse bool) (bytesResult []byte, err error) {
+	defer func() {
+		if tmpErr := recover(); tmpErr != nil {
+			err = tmpErr.(error)
+			log.Fatal("method call panic ip:%v MethodName:%v error:%v", connObj.Addr(), this.MethodName, err.Error())
+		}
+	}()
+
+	var valList []reflect.Value
+	if len(this.funcParamList) > 1 {
+		valList, err = convertor.UnMarhsalType(data, this.funcParamList[1:]...)
+		if err != nil {
+			log.Error("UnMarhsalType error ip:%v MethodName:%v error:%v", connObj.Addr(), this.MethodName, err.Error())
+			return nil, err
+		}
 	}
 
 	// 组装请求数据
@@ -35,7 +48,18 @@ func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor,
 		}
 	*/
 
-	return convertor.MarshalType(this.returnValueList, returnValList[:len(returnValList)-1]...)
+	if ifNeedResponse {
+		if len(this.returnValueList) > 0 {
+			// bytesResult, err = convertor.MarshalType(this.returnValueList, returnValList[:len(returnValList)]...) //// 如果要支持error 需要把这儿打开
+			bytesResult, err = convertor.MarshalType(this.returnValueList, returnValList...)
+			if err != nil {
+				log.Error("MarshalType error ip:%v MethodName:%v error:%v", connObj.Addr(), this.MethodName, err.Error())
+				return
+			}
+		}
+	}
+
+	return
 }
 
 func newMethodInfo(methodName string, funcObj reflect.Value, paramList []reflect.Type, returnValList []reflect.Type) *MethodInfo {

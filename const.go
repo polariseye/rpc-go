@@ -31,7 +31,8 @@ var (
 )
 
 var (
-	TimeoutError = errors.New("timeout")
+	TimeoutError        = errors.New("timeout")
+	MethodNotFoundError = errors.New("MethodNotFound")
 )
 
 const (

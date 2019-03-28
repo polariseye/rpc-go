@@ -77,8 +77,8 @@ func (this *FrameContainer) RemoveRequestObj(requestId uint32) {
 func (this *FrameContainer) ClearExpireNode() {
 	now := time.Now().Unix()
 
-	// 每两秒检查一次
-	if (now - this.preCheckTime) < 2 {
+	// 每秒检查一次
+	if (now - this.preCheckTime) < 1 {
 		return
 	}
 	this.preCheckTime = now

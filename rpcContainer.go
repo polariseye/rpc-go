@@ -2,10 +2,11 @@ package rpc
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net"
 	"reflect"
+
+	"github.com/polariseye/rpc-go/log"
 )
 
 type RpcContainer struct {
@@ -22,34 +23,52 @@ type RpcContainer struct {
 // 注册一个RPC服务端
 func (this *RpcContainer) RegisterService(obj interface{}) {
 	tp := reflect.TypeOf(obj)
-
+	val := reflect.ValueOf(obj)
 	// 提取所有公有函数
-	clsName := tp.Name()
+	clsName := this.getClassName(tp)
+
 	for i := 0; i < tp.NumMethod(); i++ {
 		mthd := tp.Method(i)
+		mthdVal := val.Method(i)
 
-		err := this.addRpcMethod(clsName, mthd.Name, mthd.Type, mthd.Func)
+		err := this.addRpcMethod(clsName, mthd.Name, mthd.Type, mthdVal, true)
 		if err != nil {
 			panic(err)
 		}
 	}
 }
 
+func (this *RpcContainer) getClassName(tp reflect.Type) string {
+	for {
+		if tp.Kind() == reflect.Struct {
+			break
+		}
+
+		tp = tp.Elem()
+	}
+
+	return tp.Name()
+}
+
 func (this *RpcContainer) RegisterFunc(moduleName string, methodName string, funcObj interface{}) {
 	tp := reflect.TypeOf(funcObj)
 	val := reflect.ValueOf(funcObj)
 
-	err := this.addRpcMethod(moduleName, methodName, tp, val)
+	err := this.addRpcMethod(moduleName, methodName, tp, val, false)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, methodType reflect.Type, methodVal reflect.Value) error {
-
+func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, methodType reflect.Type, methodVal reflect.Value, isFromStruct bool) error {
 	// 获取参数
 	paramList := make([]reflect.Type, 0, methodType.NumIn())
 	for i := 0; i < methodType.NumIn(); i++ {
+		if isFromStruct && i == 0 {
+			// 因为struct的第一个输入参数是struct自身，而调用时，不需要传这个参数，所以跳过
+			continue
+		}
+
 		paramList = append(paramList, methodType.In(i))
 	}
 
@@ -61,7 +80,7 @@ func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, met
 
 	// 第一个必须是连接对象类型的
 	if len(paramList) <= 0 || paramList[0] != RpcConnectionType {
-		return errors.New("Param invalid ")
+		return fmt.Errorf("Param invalid ModuleName:%s MethodName:%s", moduleName, methodName)
 	}
 
 	/*
@@ -91,6 +110,12 @@ func (this *RpcContainer) getMethod(methodName string) (*MethodInfo, bool) {
 	result, exist := this.funcData[methodName]
 
 	return result, exist
+}
+
+func (this *RpcContainer) RecordAllMethod() {
+	for methodName, item := range this.funcData {
+		log.Debug("MethodName:%v ParamCount:%v ReturnCount:%v", methodName, len(item.funcParamList), len(item.returnValueList))
+	}
 }
 
 func NewRpcContainer(getConvertorFunc func() IByteConvertor) *RpcContainer {
