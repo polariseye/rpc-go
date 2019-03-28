@@ -27,11 +27,13 @@ func (this *MethodInfo) Invoke(connObj *RpcConnection, convertor IByteConvertor,
 
 	returnValList := this.FuncObj.Call(callValList)
 	//// 如果存在错误，则直接返回错误
-	errVal := returnValList[len(returnValList)-1]
-	if errVal.IsNil() == false {
-		errObj := errVal.Interface().(error)
-		return nil, errObj
-	}
+	/*
+		errVal := returnValList[len(returnValList)-1]
+		if errVal.IsNil() == false {
+			errObj := errVal.Interface().(error)
+			return nil, errObj
+		}
+	*/
 
 	return convertor.MarshalType(this.returnValueList, returnValList[:len(returnValList)-1]...)
 }

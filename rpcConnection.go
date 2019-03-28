@@ -15,12 +15,13 @@ type RpcConnection struct {
 	con            net.Conn
 	isClosed       int32
 	sendChan       chan *DataFrame
+	requestChan    chan *DataFrame
 
 	requestId uint32
 }
 
-func (this *RpcConnection) Call(methodName string, responseObj interface{}, requestObj ...interface{}) (err error) {
-	downChan, err := this.Go(methodName, responseObj, requestObj...)
+func (this *RpcConnection) Call(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
+	downChan, err := this.Go(methodName, requestObj, responseObj)
 	if err != nil {
 		return err
 	}
@@ -32,7 +33,7 @@ func (this *RpcConnection) Call(methodName string, responseObj interface{}, requ
 	return <-downChan
 }
 
-func (this *RpcConnection) Go(methodName string, responseObj interface{}, requestObj ...interface{}) (donChan <-chan error, err error) {
+func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}, responseObj []interface{}) (donChan <-chan error, err error) {
 	requestBytes, err := this.container.getConvertorFunc().MarshalValue(requestObj...)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func (this *RpcConnection) Go(methodName string, responseObj interface{}, reques
 	requestInfoObj := &RequestInfo{
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
-		ReturnObj:  []interface{}{responseObj},
+		ReturnObj:  responseObj,
 		ExpireTime: time.Now().Unix() + this.container.requestExpireSecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
@@ -213,23 +214,39 @@ func (this *RpcConnection) HandleFrame(frameObj *DataFrame) {
 			requestObj.Return(requestObj.ReturnObj, frameObj.Data, tmpErr)
 		}
 	} else {
-		// 请求处理
-		methodObj, exist := this.container.getMethod(frameObj.MethodName())
-		if exist == false {
-			return
-		}
-
-		returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.container.byteOrder) ////todo:需要考虑异步处理
-		//// 应答
-		responseFrame := newResponseFrame(frameObj, returnBytes, this.getRequestId())
-		if err != nil {
-			// 应答错误处理
-			responseFrame.SetError(err.Error())
-		}
-		this.sendChan <- responseFrame
+		// 使用异步方式来处理请求
+		this.requestChan <- frameObj
 	}
 
 	return
+}
+
+func (this *RpcConnection) handleRequestFrame() {
+	for this.isClosed == No {
+		select {
+		case frameObj := <-this.requestChan:
+			{
+				if frameObj == nil {
+					continue
+				}
+
+				// 请求处理
+				methodObj, exist := this.container.getMethod(frameObj.MethodName())
+				if exist == false {
+					continue
+				}
+
+				returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.container.byteOrder) ////todo:需要考虑异步处理
+				//// 应答
+				responseFrame := newResponseFrame(frameObj, returnBytes, this.getRequestId())
+				if err != nil {
+					// 应答错误处理
+					responseFrame.SetError(err.Error())
+				}
+				this.sendChan <- responseFrame
+			}
+		}
+	}
 }
 
 func NewRpcConnection(container *RpcContainer, con net.Conn) *RpcConnection {
@@ -239,12 +256,14 @@ func NewRpcConnection(container *RpcContainer, con net.Conn) *RpcConnection {
 		con:            con,
 		isClosed:       No,
 		sendChan:       make(chan *DataFrame, 1024),
+		requestChan:    make(chan *DataFrame, 1024),
 		requestId:      rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
 	}
 
 	// 开协程进行具体处理
 	go result.receive()
 	go result.send()
+	go result.handleRequestFrame()
 
 	return result
 }

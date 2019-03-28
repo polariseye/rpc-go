@@ -64,10 +64,12 @@ func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, met
 		return errors.New("Param invalid ")
 	}
 
-	// 返回值最后一个必须是error
-	if len(returnList) <= 0 || returnList[len(returnList)-1] != ErrorType {
-		return errors.New("Return invalid ")
-	}
+	/*
+		// 返回值最后一个必须是error
+		if len(returnList) <= 0 || returnList[len(returnList)-1] != ErrorType {
+			return errors.New("Return invalid ")
+		}
+	*/
 
 	name := fmt.Sprintf("%s_%s", moduleName, methodName)
 	if _, exist := this.funcData[name]; exist {
