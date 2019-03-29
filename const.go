@@ -18,11 +18,11 @@ const (
 
 // Flag信息
 const (
-	// 请求帧
-	TransformType_Request = 0
+	// 正常的数据帧
+	TransformType_Nomal byte = 0x00
 
-	// 应答帧
-	TransformType_Response = 1
+	// 心跳
+	TransformType_KeepAlive byte = 0x01
 )
 
 var (
@@ -31,8 +31,12 @@ var (
 )
 
 var (
-	TimeoutError        = errors.New("timeout")
-	MethodNotFoundError = errors.New("MethodNotFound")
+	CustCloseConnectionError = errors.New("CustCloseConnectionError")
+	CallTimeoutError         = errors.New("CallTimeoutError")
+	ConnectionTimeOut        = errors.New("ConnectionTimeOut")
+	MethodNotFoundError      = errors.New("MethodNotFound")
+	HandlerExistedError      = errors.New("HandlerExisted")
+	HaveConnectedError       = errors.New("HaveConnectedError")
 )
 
 const (

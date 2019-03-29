@@ -1,27 +1,18 @@
 package rpc
 
 import (
-	"encoding/binary"
 	"fmt"
-	"net"
 	"reflect"
 
 	"github.com/polariseye/rpc-go/log"
 )
 
-type RpcContainer struct {
-	funcData         map[string]*MethodInfo
-	getConvertorFunc func() IByteConvertor
-
-	// 请求超时时间
-	requestExpireMillisecond int64
-
-	// 数据的字节序
-	byteOrder binary.ByteOrder
+type ApiMgr struct {
+	funcData map[string]*MethodInfo
 }
 
 // 注册一个RPC服务端
-func (this *RpcContainer) RegisterService(obj interface{}) {
+func (this *ApiMgr) RegisterService(obj interface{}) {
 	tp := reflect.TypeOf(obj)
 	val := reflect.ValueOf(obj)
 	// 提取所有公有函数
@@ -38,7 +29,7 @@ func (this *RpcContainer) RegisterService(obj interface{}) {
 	}
 }
 
-func (this *RpcContainer) getClassName(tp reflect.Type) string {
+func (this *ApiMgr) getClassName(tp reflect.Type) string {
 	for {
 		if tp.Kind() == reflect.Struct {
 			break
@@ -50,7 +41,7 @@ func (this *RpcContainer) getClassName(tp reflect.Type) string {
 	return tp.Name()
 }
 
-func (this *RpcContainer) RegisterFunc(moduleName string, methodName string, funcObj interface{}) {
+func (this *ApiMgr) RegisterFunc(moduleName string, methodName string, funcObj interface{}) {
 	tp := reflect.TypeOf(funcObj)
 	val := reflect.ValueOf(funcObj)
 
@@ -60,7 +51,7 @@ func (this *RpcContainer) RegisterFunc(moduleName string, methodName string, fun
 	}
 }
 
-func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, methodType reflect.Type, methodVal reflect.Value, isFromStruct bool) error {
+func (this *ApiMgr) addRpcMethod(moduleName string, methodName string, methodType reflect.Type, methodVal reflect.Value, isFromStruct bool) error {
 	// 获取参数
 	paramList := make([]reflect.Type, 0, methodType.NumIn())
 	for i := 0; i < methodType.NumIn(); i++ {
@@ -101,28 +92,20 @@ func (this *RpcContainer) addRpcMethod(moduleName string, methodName string, met
 	return nil
 }
 
-// 获取一个连接对象
-func (this *RpcContainer) GetRpcConnection(con net.Conn) *RpcConnection {
-	return NewRpcConnection(this, con)
-}
-
-func (this *RpcContainer) getMethod(methodName string) (*MethodInfo, bool) {
+func (this *ApiMgr) getMethod(methodName string) (*MethodInfo, bool) {
 	result, exist := this.funcData[methodName]
 
 	return result, exist
 }
 
-func (this *RpcContainer) RecordAllMethod() {
+func (this *ApiMgr) RecordAllMethod() {
 	for methodName, item := range this.funcData {
 		log.Debug("MethodName:%v ParamCount:%v ReturnCount:%v", methodName, len(item.funcParamList), len(item.returnValueList))
 	}
 }
 
-func NewRpcContainer(getConvertorFunc func() IByteConvertor) *RpcContainer {
-	return &RpcContainer{
-		funcData:                 make(map[string]*MethodInfo, 8),
-		getConvertorFunc:         getConvertorFunc,
-		byteOrder:                binary.BigEndian,
-		requestExpireMillisecond: 2 * 60 * 1000,
+func newApiMgr() *ApiMgr {
+	return &ApiMgr{
+		funcData: make(map[string]*MethodInfo, 8),
 	}
 }

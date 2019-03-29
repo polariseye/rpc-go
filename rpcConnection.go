@@ -1,25 +1,54 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 	"math/rand"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/polariseye/rpc-go/log"
 )
 
-type RpcConnection struct {
-	container      *RpcContainer
-	frameContainer *FrameContainer
-	con            net.Conn
-	isClosed       int32
-	sendChan       chan *DataFrame
-	requestChan    chan *DataFrame
+type RpcConnectioner interface {
+	Call(methodName string, requestObj []interface{}, responseObj []interface{}) (err error)
+	CallAsync(methodName string, requestObj []interface{}, responseObj []interface{}) (donChan <-chan error, err error)
+	CallAsyncWithNoResponse(methodName string, requestObj []interface{}, responseObj []interface{}) (err error)
+	CallTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (err error)
+	CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (donChan <-chan error, err error)
+	Close()
+	Conn() net.Conn
+	Addr() string
+	IsClosed() bool
+}
 
-	requestId uint32
+// 连接Id，用于为每个连接分配一个唯一Id
+var nowMaxConnectionId int64
+
+// 获取一个唯一连接Id
+func getNextConnectionId() int64 {
+	return atomic.AddInt64(&nowMaxConnectionId, 1)
+}
+
+type RpcConnection struct {
+	connectionId     int64                 //// 连接Id
+	apiMgr           *ApiMgr               //// Api管理对象
+	frameContainer   *FrameContainer       //// 帧容器
+	con              net.Conn              //// 实际连接对象
+	isClosed         int32                 //// 当前是否是已经关闭了连接
+	sendChan         chan *DataFrame       //// 帧发送队列
+	requestChan      chan *DataFrame       //// 请求发送帧
+	rpcWatcherObj    RpcWatcher            //// 连接具体处理
+	byteOrder        binary.ByteOrder      //// 数据的字节序
+	getConvertorFunc func() IByteConvertor //// 数据转换对象获取
+
+	requestExpireMillisecond int64  // 请求超时时间,单位毫秒
+	requestId                uint32 //// 请求Id，会为每次请求分配一个唯一Id
+
+	closeWaitGroup sync.WaitGroup
 }
 
 func (this *RpcConnection) Call(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
@@ -38,7 +67,7 @@ func (this *RpcConnection) Call(methodName string, requestObj []interface{}, res
 func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}, responseObj []interface{}) (donChan <-chan error, err error) {
 	var requestBytes []byte
 	if len(requestObj) > 0 {
-		requestBytes, err = this.container.getConvertorFunc().MarshalValue(requestObj...)
+		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)
 		if err != nil {
 			return nil, err
 		}
@@ -53,7 +82,7 @@ func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  responseObj,
-		ExpireTime: time.Now().UnixNano()/1000000 + this.container.requestExpireMillisecond,
+		ExpireTime: time.Now().UnixNano()/1000000 + this.requestExpireMillisecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, true)
 
@@ -66,7 +95,7 @@ func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}
 func (this *RpcConnection) CallAsyncWithNoResponse(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
 	var requestBytes []byte
 	if len(requestObj) > 0 {
-		requestBytes, err = this.container.getConvertorFunc().MarshalValue(requestObj...)
+		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)
 		if err != nil {
 			return err
 		}
@@ -81,7 +110,7 @@ func (this *RpcConnection) CallAsyncWithNoResponse(methodName string, requestObj
 		RequestId:  this.getRequestId(),
 		DownChan:   make(chan error, 10),
 		ReturnObj:  responseObj,
-		ExpireTime: time.Now().UnixNano()/1000000 + this.container.requestExpireMillisecond,
+		ExpireTime: time.Now().UnixNano()/1000000 + this.requestExpireMillisecond,
 	}
 	frameObj := newRequestFrame(requestInfoObj, methodName, requestBytes, requestInfoObj.RequestId, false)
 	this.sendChan <- frameObj
@@ -105,7 +134,7 @@ func (this *RpcConnection) CallTimeout(methodName string, requestObj []interface
 func (this *RpcConnection) CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (donChan <-chan error, err error) {
 	var requestBytes []byte
 	if len(requestObj) > 0 {
-		requestBytes, err = this.container.getConvertorFunc().MarshalValue(requestObj...)
+		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +163,14 @@ func (this *RpcConnection) getRequestId() uint32 {
 	return atomic.AddUint32(&this.requestId, 1)
 }
 
-func (this *RpcConnection) Close(err error) {
+func (this *RpcConnection) Close() {
+	this.close(CustCloseConnectionError)
+
+	// 等待所有协程退出
+	this.closeWaitGroup.Wait()
+}
+
+func (this *RpcConnection) close(err error) {
 	// 设置为已关闭
 	if atomic.CompareAndSwapInt32(&this.isClosed, No, Yes) == false {
 		return
@@ -159,9 +195,11 @@ func (this *RpcConnection) Addr() string {
 
 func (this *RpcConnection) receive() {
 	var err error
-	defer this.Close(err)
+	defer this.closeWaitGroup.Done()
+	defer this.close(err)
 
 	var header = make([]byte, HEADER_LENGTH)
+	var isHandled bool
 	for this.isClosed == No {
 		// 读取包头
 		err = this.receiveHeader(this.con, header)
@@ -170,15 +208,8 @@ func (this *RpcConnection) receive() {
 		}
 
 		// 获取帧头
-		frameObj := convertHeader(header, this.container.byteOrder)
-		// 是请求帧，但又没有设置请求函数，则代表是非法帧
-		if frameObj.MethodNameLen == 0 && frameObj.ResponseFrameId == 0 {
-			log.Warn("receive error frame ip:%v", this.Addr())
-			// 跳过错误的帧
-			continue
-		}
-
-		// 读取包内容
+		frameObj := convertHeader(header, this.byteOrder)
+		//// 读取包内容
 		if frameObj.MethodNameLen > 0 || frameObj.ContentLength > 0 {
 			buffer := make([]byte, frameObj.ContentLength+uint32(frameObj.MethodNameLen))
 			_, err = io.ReadFull(this.con, buffer)
@@ -187,6 +218,19 @@ func (this *RpcConnection) receive() {
 			}
 
 			frameObj.SetData(buffer)
+		}
+
+		isHandled, err = this.rpcWatcherObj.beforeHandleFrame(frameObj)
+		if isHandled || err != nil {
+			// 已处理，或者出现error，则跳过这个包
+			continue
+		}
+
+		// 是请求帧，但又没有设置请求函数，则代表是非法帧
+		if frameObj.MethodNameLen == 0 && frameObj.ResponseFrameId == 0 {
+			log.Warn("receive error frame ip:%v", this.Addr())
+			// 跳过错误的帧
+			continue
 		}
 
 		// 处理请求
@@ -232,6 +276,8 @@ func (this *RpcConnection) receiveHeader(con net.Conn, header []byte) error {
 }
 
 func (this *RpcConnection) send() {
+	defer this.closeWaitGroup.Done()
+
 	// 清空所有请求
 	defer func() {
 		for {
@@ -247,12 +293,12 @@ func (this *RpcConnection) send() {
 		}
 	}()
 	var err error
-	defer this.Close(err)
+	defer this.close(err)
 
 	for this.isClosed == No {
 		select {
 		case item := <-this.sendChan:
-			_, err = this.con.Write(item.GetHeader(this.container.byteOrder))
+			_, err = this.con.Write(item.GetHeader(this.byteOrder))
 			if err != nil {
 				break
 			}
@@ -272,12 +318,21 @@ func (this *RpcConnection) send() {
 					break
 				}
 			}
+
+			// 每次发送数据后调用的接口
+			this.rpcWatcherObj.afterSend(item)
 		default:
 			{
 				time.Sleep(5 * time.Millisecond)
 			}
 		}
 
+		// 发送调度处理
+		if err = this.rpcWatcherObj.sendSchedule(); err != nil {
+			break
+		}
+
+		// 清理过期包
 		this.frameContainer.ClearExpireNode()
 	}
 }
@@ -296,7 +351,7 @@ func (this *RpcConnection) handleFrame(frameObj *DataFrame) {
 			requestObj.ReturnError(errors.New(string(frameObj.Data)))
 		} else if len(requestObj.ReturnObj) > 0 {
 			//// 反序列化参数
-			tmpErr := this.container.getConvertorFunc().UnMarhsalValue(frameObj.Data, requestObj.ReturnObj...)
+			tmpErr := this.getConvertorFunc().UnMarhsalValue(frameObj.Data, requestObj.ReturnObj...)
 			requestObj.Return(requestObj.ReturnObj, frameObj.Data, tmpErr)
 		} else {
 			//// 没有返回值
@@ -311,6 +366,8 @@ func (this *RpcConnection) handleFrame(frameObj *DataFrame) {
 }
 
 func (this *RpcConnection) handleRequestFrame() {
+	defer this.closeWaitGroup.Done()
+
 	for this.isClosed == No {
 		select {
 		case frameObj := <-this.requestChan:
@@ -320,7 +377,7 @@ func (this *RpcConnection) handleRequestFrame() {
 				}
 
 				// 请求处理
-				methodObj, exist := this.container.getMethod(frameObj.MethodName())
+				methodObj, exist := this.apiMgr.getMethod(frameObj.MethodName())
 				if exist == false {
 					this.response(frameObj, nil, MethodNotFoundError)
 					log.Error("not fount method methodname:%v", frameObj.MethodName())
@@ -328,7 +385,8 @@ func (this *RpcConnection) handleRequestFrame() {
 					continue
 				}
 
-				returnBytes, err := methodObj.Invoke(this, this.container.getConvertorFunc(), frameObj.Data, this.container.byteOrder, frameObj.IsNeedResponse())
+				returnBytes, err := methodObj.Invoke(this, this.getConvertorFunc(), frameObj.Data, this.byteOrder, frameObj.IsNeedResponse())
+				this.rpcWatcherObj.afterInvoke(frameObj, returnBytes, err)
 				this.response(frameObj, returnBytes, err)
 			}
 		}
@@ -350,16 +408,35 @@ func (this *RpcConnection) response(frameObj *DataFrame, returnBytes []byte, err
 	this.sendChan <- responseFrame
 }
 
-func NewRpcConnection(container *RpcContainer, con net.Conn) *RpcConnection {
+func (this *RpcConnection) Conn() net.Conn {
+	return this.con
+}
+
+func (this *RpcConnection) IsClosed() bool {
+	return this.isClosed == Yes
+}
+
+func (this *RpcConnection) ConnectionId() int64 {
+	return this.connectionId
+}
+
+func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, getConvertorFunc func() IByteConvertor) *RpcConnection {
 	var result = &RpcConnection{
-		container:      container,
-		frameContainer: newFrameContainer(),
-		con:            con,
-		isClosed:       No,
-		sendChan:       make(chan *DataFrame, 1024),
-		requestChan:    make(chan *DataFrame, 1024),
-		requestId:      rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
+		apiMgr:                   apiMgr,
+		frameContainer:           newFrameContainer(),
+		con:                      con,
+		isClosed:                 No,
+		sendChan:                 make(chan *DataFrame, 1024),
+		requestChan:              make(chan *DataFrame, 1024),
+		requestExpireMillisecond: 2 * 60 * 1000,
+		rpcWatcherObj:            watcherObj,
+		requestId:                rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
+		connectionId:             getNextConnectionId(),
+		byteOrder:                binary.BigEndian,
+		getConvertorFunc:         getConvertorFunc,
 	}
+
+	result.closeWaitGroup.Add(3)
 
 	// 开协程进行具体处理
 	go result.receive()

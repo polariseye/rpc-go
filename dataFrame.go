@@ -14,9 +14,16 @@ type DataFrame struct {
 	Data            []byte //// 内容具体数据
 }
 
-//// 传输类型 0:请求 1：应答
+//// 传输类型 0:正常包 1：心跳包
 func (this *DataFrame) TransformType() byte {
 	return this.Flag & 0x03
+}
+
+// 设置传输类型
+func (this *DataFrame) SetTransformType(transformType byte) {
+	this.Flag = this.Flag &^ 0x03        //// 把前两位置0
+	transformType = transformType & 0x03 //// 把无关的几位置0
+	this.Flag = this.Flag | transformType
 }
 
 //// 是否是异常

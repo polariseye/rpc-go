@@ -94,7 +94,7 @@ func (this *FrameContainer) ClearExpireNode() {
 				if expireNode == nil {
 					expireNode = make([]*RequestInfo, 0, 8)
 				}
-				if item.ReturnError(TimeoutError) {
+				if item.ReturnError(CallTimeoutError) {
 					expireNode = append(expireNode, item)
 				}
 			}

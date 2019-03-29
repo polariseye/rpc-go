@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/polariseye/rpc-go"
 	"github.com/polariseye/rpc-go/log"
@@ -23,7 +24,7 @@ func main() {
 	rpcObj := containerObj.GetRpcConnection(con)
 	defer rpcObj.Close(nil)
 
-	allTst(rpcObj)
+	time.Sleep(1000 * time.Second)
 }
 
 func callTst(rpcObj *rpc.RpcConnection) {
