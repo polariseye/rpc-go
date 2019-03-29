@@ -14,15 +14,16 @@ func main() {
 	// 注册客户端的服务
 	rpcObj.RegisterService(new(Sample))
 
-	rpcObj.Start("127.0.0.1:50001", true)
-
 	rpcObj.AddAfterSendHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
 		log.Debug("发送帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
 			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
 	})
 
+	rpcObj.Start("127.0.0.1:50001", true)
+
 	defer rpcObj.Close()
 
+	callTst(rpcObj)
 	time.Sleep(1000 * time.Second)
 }
 

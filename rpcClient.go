@@ -36,32 +36,41 @@ func (this *RpcClient) Close() {
 // 返回值:
 // error:错误信息
 func (this *RpcClient) Start(addr string, isAutoReconnect bool) error {
-	if *this.isStopped == false {
-		return HaveConnectedError
+	var result error
+	func() {
+		this.autoReconnectLockObj.Lock()
+		defer this.autoReconnectLockObj.Unlock()
+
+		if *this.isStopped == false {
+			result = HaveConnectedError
+			return
+		}
+		if this.IsClosed() == false {
+			result = HaveConnectedError
+			return
+		}
+
+		// 因为可能重连时会用到isStopped,确保重连协程能够正常退出，所以new一个新对象
+		*this.isStopped = true
+		this.isStopped = new(bool)
+
+		this.isAutoReconnect = isAutoReconnect
+		this.addr = addr
+	}()
+
+	if result != nil {
+		return result
 	}
-	if this.IsClosed() == false {
-		return HaveConnectedError
+
+	// 先尝试连接一次
+	if this.connect(this.isStopped, addr) {
+		return nil
 	}
-
-	// 因为可能重连时会用到isStopped,确保重连协程能够正常退出，所以new一个新对象
-	*this.isStopped = true
-	this.isStopped = new(bool)
-
-	this.autoReconnectLockObj.Lock()
-	defer this.autoReconnectLockObj.Unlock()
-
-	this.isAutoReconnect = isAutoReconnect
-	this.addr = addr
 
 	if isAutoReconnect {
 		// 开启重连
 		go this.reconnect(this.isStopped)
 	} else {
-		// 只连接一次
-		if this.connect(this.isStopped, addr) {
-			return nil
-		}
-
 		return ConnectionTimeOut
 	}
 
@@ -74,6 +83,9 @@ func (this *RpcClient) Start(addr string, isAutoReconnect bool) error {
 // 返回值:
 // error:错误信息
 func (this *RpcClient) Start2(con net.Conn) error {
+	this.autoReconnectLockObj.Lock()
+	defer this.autoReconnectLockObj.Unlock()
+
 	if *this.isStopped == false {
 		return HaveConnectedError
 	}
@@ -85,8 +97,6 @@ func (this *RpcClient) Start2(con net.Conn) error {
 	*this.isStopped = true
 	this.isStopped = new(bool)
 
-	this.autoReconnectLockObj.Lock()
-	defer this.autoReconnectLockObj.Unlock()
 	conObj := newRpcConnection(this.ApiMgr, con, this, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 
