@@ -182,6 +182,11 @@ func (this *RpcConnection) close(err error) {
 	// 清空所有请求
 	this.frameContainer.ReturnAllRequest(err)
 
+	con := this.con
+	if con != nil {
+		con.Close()
+	}
+
 	log.Debug("connection closed ip:%v", this.Addr())
 }
 
@@ -203,7 +208,7 @@ func (this *RpcConnection) receive() {
 	for this.isClosed == No {
 		// 读取包头
 		err = this.receiveHeader(this.con, header)
-		if err != nil {
+		if this.isClosed == Yes || err != nil {
 			break
 		}
 
@@ -283,6 +288,11 @@ func (this *RpcConnection) send() {
 		for {
 			select {
 			case item := <-this.sendChan:
+				if item.RequestObj == nil {
+					// 因为心跳没有请求数据，所以此处需要排队
+					continue
+				}
+
 				item.RequestObj.ReturnError(io.EOF)
 				this.frameContainer.RemoveRequestObj(item.RequestObj.RequestId)
 			default:

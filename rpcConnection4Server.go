@@ -42,11 +42,11 @@ func (this *RpcConnection4Server) beforeHandleFrame(frameObj *DataFrame) (isHand
 	//// 心跳处理
 	if frameObj.TransformType() == TransformType_KeepAlive {
 		if frameObj.ResponseFrameId == 0 {
-			log.Debug("receive KeepAlive IP:%v", this.Addr())
+			// log.Debug("receive KeepAlive IP:%v", this.Addr())
 			//// 只有心跳请求才返回心跳应答
 			this.responseKeepAlive(frameObj)
 		} else {
-			log.Debug("receive KeepAlive Response IP:%v", this.Addr())
+			//log.Debug("receive KeepAlive Response IP:%v", this.Addr())
 		}
 		// 更新上次心跳时间
 		this.preReceiveKeepAliveTime = time.Now().Unix()
@@ -77,7 +77,9 @@ func (this *RpcConnection4Server) afterClose() {
 
 func NewRpcConnection4Server(con net.Conn, apiMgr *ApiMgr, getConvertorFunc func() IByteConvertor) *RpcConnection4Server {
 	result := &RpcConnection4Server{
-		RpcWatchBase: newRpcWatchBase(),
+		RpcWatchBase:            newRpcWatchBase(),
+		connectionTimeoutSecond: 20,
+		preReceiveKeepAliveTime: time.Now().Unix(),
 	}
 
 	result.RpcConnection = newRpcConnection(apiMgr, con, result, getConvertorFunc)

@@ -2,32 +2,31 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/polariseye/rpc-go"
 	"github.com/polariseye/rpc-go/log"
 )
 
-var containerObj = rpc.NewRpcContainer(rpc.GetJsonConvertor)
+var rpcObj = rpc.NewRpcClient(rpc.GetJsonConvertor)
 
 func main() {
-	con, err := net.Dial("tcp", "127.0.0.1:50001")
-	if err != nil {
-		fmt.Println("出错：", err.Error())
-		return
-	}
-
 	// 注册客户端的服务
-	containerObj.RegisterService(new(Sample))
+	rpcObj.RegisterService(new(Sample))
 
-	rpcObj := containerObj.GetRpcConnection(con)
-	defer rpcObj.Close(nil)
+	rpcObj.Start("127.0.0.1:50001", true)
+
+	rpcObj.AddAfterSendHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
+		log.Debug("发送帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
+			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
+	})
+
+	defer rpcObj.Close()
 
 	time.Sleep(1000 * time.Second)
 }
 
-func callTst(rpcObj *rpc.RpcConnection) {
+func callTst(rpcObj rpc.RpcConnectioner) {
 	log.Debug("开始同步调用测试")
 	defer log.Debug("完成同步调用测试")
 

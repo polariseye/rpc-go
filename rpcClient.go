@@ -33,10 +33,9 @@ func (this *RpcClient) Close() {
 // Start 连接到指定地址
 // addr: 服务端地址
 // isAutoReconnect: 是否自动重连到服务端
-// getConvertorFunc: 转换对象获取函数（协议处理用）
 // 返回值:
 // error:错误信息
-func (this *RpcClient) Start(addr string, isAutoReconnect bool, getConvertorFunc func() IByteConvertor) error {
+func (this *RpcClient) Start(addr string, isAutoReconnect bool) error {
 	if *this.isStopped == false {
 		return HaveConnectedError
 	}
@@ -52,7 +51,6 @@ func (this *RpcClient) Start(addr string, isAutoReconnect bool, getConvertorFunc
 	defer this.autoReconnectLockObj.Unlock()
 
 	this.isAutoReconnect = isAutoReconnect
-	this.getConvertorFunc = getConvertorFunc
 	this.addr = addr
 
 	if isAutoReconnect {
@@ -73,10 +71,9 @@ func (this *RpcClient) Start(addr string, isAutoReconnect bool, getConvertorFunc
 // Start2 使用指定连接进行协议处理
 // 使用此函数开启处理进，将不会进行断线重连。连接完全由外部处理
 // con:连接对象
-// getConvertorFunc:转换对象获取函数（协议处理用）
 // 返回值:
 // error:错误信息
-func (this *RpcClient) Start2(con net.Conn, getConvertorFunc func() IByteConvertor) error {
+func (this *RpcClient) Start2(con net.Conn) error {
 	if *this.isStopped == false {
 		return HaveConnectedError
 	}
@@ -90,8 +87,7 @@ func (this *RpcClient) Start2(con net.Conn, getConvertorFunc func() IByteConvert
 
 	this.autoReconnectLockObj.Lock()
 	defer this.autoReconnectLockObj.Unlock()
-	this.getConvertorFunc = getConvertorFunc
-	conObj := newRpcConnection(this.ApiMgr, con, this, getConvertorFunc)
+	conObj := newRpcConnection(this.ApiMgr, con, this, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 
 	return nil
@@ -132,36 +128,44 @@ func (this *RpcClient) reconnect(isStopped *bool) {
 
 // connect
 func (this *RpcClient) connect(isStopped *bool, addr string) bool {
+	log.Info("start connect to %v", addr)
 	con, err := net.Dial("tcp", addr)
 	if err != nil {
-		log.Debug("fail to connect to server addr:%v error:%v", addr, err.Error())
+		log.Info("fail to connect to server addr:%v error:%v", addr, err.Error())
 		return false
-
 	}
 
 	this.autoReconnectLockObj.Lock()
 	defer this.autoReconnectLockObj.Unlock()
 	if *isStopped {
+		log.Info("change server old server:%v", addr)
 		con.Close()
 	}
 
 	conObj := newRpcConnection(this.ApiMgr, con, this, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
+	log.Info("connected to server:%v", addr)
 
 	return true
 }
 
 // NewRpcClient 新建Rpc连接客户端对象
-func NewRpcClient() *RpcClient {
+// getConvertorFunc:转换对象获取函数（协议处理用）
+func NewRpcClient(getConvertorFunc func() IByteConvertor) *RpcClient {
 	result := &RpcClient{
-		ApiMgr:          newApiMgr(),
-		isAutoReconnect: false,
-		isStopped:       new(bool),
+		ApiMgr:               newApiMgr(),
+		isAutoReconnect:      false,
+		isStopped:            new(bool),
+		getConvertorFunc:     getConvertorFunc,
+		RpcConnection4Client: NewRpcConnection4Client(),
 	}
+
+	*result.isStopped = true
 
 	// 添加对自动重连的支持
 	result.AddCloseHandler("RpcClient.reconnect", func(conObj RpcConnectioner) {
 		if result.isAutoReconnect {
+
 			go result.reconnect(result.isStopped)
 		}
 

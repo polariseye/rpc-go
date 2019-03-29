@@ -61,7 +61,7 @@ func (this *RpcWatchBase) invokeSendScheduleHandler(connObj RpcConnectioner) {
 	}
 }
 
-func (this *RpcWatchBase) AddBeforeHandleFrameHandler(funcName string, funcObj func(connObj RpcConnectioner, frameObj *DataFrame)) (err error) {
+func (this *RpcWatchBase)AddBeforeHandleFrameHandler(funcName string, funcObj func(connObj RpcConnectioner, frameObj *DataFrame)) (err error) {
 	if _, exist := this.beforeHandleFrameHandlerData[funcName]; exist {
 		return HandlerExistedError
 	}

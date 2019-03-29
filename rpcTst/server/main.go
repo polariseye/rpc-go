@@ -2,35 +2,27 @@ package main
 
 import (
 	"fmt"
-	"net"
 
 	"github.com/polariseye/rpc-go"
+	"github.com/polariseye/rpc-go/log"
 )
 
-var containerObj = rpc.NewRpcContainer(rpc.GetJsonConvertor)
+var rpcServerObj = rpc.NewRpcServer(rpc.GetJsonConvertor)
 
 func Hello(connObj *rpc.RpcConnection, name string) (say string, err error) {
 	return fmt.Sprintf("你好哈:%v", name), nil
 }
 
 func main() {
-	containerObj.RegisterFunc("global", "Hello", Hello)
-	containerObj.RegisterService(new(Sample))
+	rpcServerObj.RegisterFunc("global", "Hello", Hello)
+	rpcServerObj.RegisterService(new(Sample))
 
-	containerObj.RecordAllMethod()
+	rpcServerObj.RecordAllMethod()
 
-	listenObj, err := net.Listen("tcp", "127.0.0.1:50001")
-	if err != nil {
-		fmt.Println("出错：", err.Error())
-		return
-	}
+	rpcServerObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
+		log.Debug("Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
+			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
+	})
 
-	for {
-		con, err := listenObj.Accept()
-		if err != nil {
-			fmt.Println("出错：", err.Error())
-		}
-
-		containerObj.GetRpcConnection(con)
-	}
+	rpcServerObj.Start("127.0.0.1:50001")
 }

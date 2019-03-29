@@ -76,8 +76,7 @@ func (this *RpcServer) onConnectionClose(connObj *RpcConnection4Server) {
 	delete(this.connData, connObj.ConnectionId())
 }
 
-func (this *RpcServer) Start(addr string, getConvertorFunc func() IByteConvertor) error {
-	this.getConvertorFunc = getConvertorFunc
+func (this *RpcServer) Start(addr string) error {
 	defer log.Info("listen over Addr:%v", addr)
 
 	listener, err := net.Listen("tcp", addr)
@@ -98,8 +97,7 @@ func (this *RpcServer) Start(addr string, getConvertorFunc func() IByteConvertor
 	}
 }
 
-func (this *RpcServer) Start2(listener net.Listener, getConvertorFunc func() IByteConvertor) {
-	this.getConvertorFunc = getConvertorFunc
+func (this *RpcServer) Start2(listener net.Listener) {
 	defer log.Info("listen over Addr:%v", listener.Addr())
 
 	for {
@@ -114,12 +112,13 @@ func (this *RpcServer) Start2(listener net.Listener, getConvertorFunc func() IBy
 	}
 }
 
-func NewRpcServer() *RpcServer {
+func NewRpcServer(getConvertorFunc func() IByteConvertor) *RpcServer {
 	result := &RpcServer{
 		connData:                 make(map[int64]*RpcConnection4Server, 8),
 		ApiMgr:                   newApiMgr(),
 		RpcWatchBase:             newRpcWatchBase(),
 		newConnectionHandlerData: make(map[string]func(connObj RpcConnectioner) error, 8),
+		getConvertorFunc:         getConvertorFunc,
 	}
 
 	return result

@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"time"
+
+	"github.com/polariseye/rpc-go/log"
 )
 
 type RpcConnection4Client struct {
@@ -24,8 +26,11 @@ func (this *RpcConnection4Client) sendSchedule() (err error) {
 	if (now - this.preSendKeepAliveTime) > this.keepAliveInterval {
 		frameObj := newRequestFrame(nil, "", nil, this.getRequestId(), true)
 		frameObj.SetTransformType(TransformType_KeepAlive)
-		_, err := this.con.Write(frameObj.GetHeader(this.byteOrder))
+
+		bytesData := frameObj.GetHeader(this.byteOrder)
+		_, err := this.con.Write(bytesData)
 		if err != nil {
+			log.Error("send data error:%v", err.Error())
 			return err
 		}
 
@@ -39,6 +44,7 @@ func (this *RpcConnection4Client) sendSchedule() (err error) {
 
 func (this *RpcConnection4Client) beforeHandleFrame(frameObj *DataFrame) (isHandled bool, err error) {
 	if frameObj.TransformType() == TransformType_KeepAlive {
+		log.Debug("收到心跳")
 		// 心跳不下发了，没什么意思
 		return
 	}
@@ -60,7 +66,7 @@ func (this *RpcConnection4Client) setConnection(con *RpcConnection) {
 
 func (this *RpcConnection4Client) IsClosed() bool {
 	if this.RpcConnection == nil {
-		return false
+		return true
 	}
 
 	return this.RpcConnection.IsClosed()
@@ -68,7 +74,8 @@ func (this *RpcConnection4Client) IsClosed() bool {
 
 func NewRpcConnection4Client() *RpcConnection4Client {
 	result := &RpcConnection4Client{
-		RpcWatchBase: newRpcWatchBase(),
+		RpcWatchBase:      newRpcWatchBase(),
+		keepAliveInterval: 5,
 	}
 
 	return result
