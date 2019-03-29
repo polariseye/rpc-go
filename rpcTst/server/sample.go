@@ -10,9 +10,9 @@ import (
 type Sample struct {
 }
 
-func (this *Sample) VoidTst(connObj *rpc.RpcConnection) error {
+func (this *Sample) VoidTst(connObj *rpc.RpcConnection) {
 	fmt.Println("调用成功!!!!!!!!!!!!!!!!!!!")
-	return nil
+	return
 }
 
 func (this *Sample) StringTst1(connObj *rpc.RpcConnection) string {

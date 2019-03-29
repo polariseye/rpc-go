@@ -44,7 +44,7 @@ func (this *RpcConnection4Client) sendSchedule() (err error) {
 
 func (this *RpcConnection4Client) beforeHandleFrame(frameObj *DataFrame) (isHandled bool, err error) {
 	if frameObj.TransformType() == TransformType_KeepAlive {
-		log.Debug("receive keepalive Addr:", this.Addr())
+		log.Debug("receive keepalive Addr:%v", this.Addr())
 		// 心跳不下发了，没什么意思
 		return
 	}

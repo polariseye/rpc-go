@@ -18,12 +18,16 @@ func main() {
 		log.Debug("发送帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
 			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
 	})
+	rpcObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
+		log.Debug("收到帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
+			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
+	})
 
 	rpcObj.Start("127.0.0.1:50001", true)
 
 	defer rpcObj.Close()
 
-	callTst(rpcObj)
+	// multGoTst(rpcObj)
 	time.Sleep(1000 * time.Second)
 }
 
@@ -81,7 +85,7 @@ func callTst(rpcObj rpc.RpcConnectioner) {
 	}
 }
 
-func allTst(rpcObj *rpc.RpcConnection) {
+func allTst(rpcObj rpc.RpcConnectioner) {
 	log.Debug("开始allTst测试")
 	defer log.Debug("完成allTst测试")
 
@@ -112,4 +116,22 @@ func allTst(rpcObj *rpc.RpcConnection) {
 	} else {
 		fmt.Println("Sample_TimeoutTst CallTimeout : 应答数据:", result)
 	}
+}
+
+func multGoTst(rpcObj rpc.RpcConnectioner) {
+	for i := 0; i < 2; i++ {
+		go func(index int) {
+			for {
+				var result = ""
+				err := rpcObj.Call("global_Hello", []interface{}{"qqnihao"}, []interface{}{&result})
+				if err != nil {
+					fmt.Println("global_Hello CallAsync 错误信息:", err.Error())
+				} else {
+					fmt.Println("index: ", index, " val:", result)
+				}
+			}
+		}(i)
+	}
+
+	time.Sleep(1000 * time.Second)
 }

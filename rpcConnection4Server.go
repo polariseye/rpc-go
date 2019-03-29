@@ -16,6 +16,11 @@ type RpcConnection4Server struct {
 	preReceiveKeepAliveTime int64 //// 上次收到心跳的时间
 }
 
+// SetConnectionTimeoutSecond 设置连接超时时间（多久没有收到心跳就断开连接）
+func (this *RpcConnection4Server) SetConnectionTimeoutSecond(connectionTimeoutSecond int64) {
+	this.connectionTimeoutSecond = connectionTimeoutSecond
+}
+
 func (this *RpcConnection4Server) afterSend(frameObj *DataFrame) (err error) {
 	this.invokeAfterSendHandler(this, frameObj)
 	return nil

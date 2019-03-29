@@ -19,6 +19,7 @@ type RpcConnectioner interface {
 	CallAsyncWithNoResponse(methodName string, requestObj []interface{}, responseObj []interface{}) (err error)
 	CallTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (err error)
 	CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (donChan <-chan error, err error)
+	SetRequestExpireMillisecond(requestExpireMillisecond int64)
 	Close()
 	Conn() net.Conn
 	Addr() string
@@ -49,6 +50,12 @@ type RpcConnection struct {
 	requestId                uint32 //// 请求Id，会为每次请求分配一个唯一Id
 
 	closeWaitGroup sync.WaitGroup
+}
+
+// SetRequestExpireMillisecond 设置默认的请求超时时间,
+// requestExpireMillisecond:请求超时时长 单位：毫秒
+func (this *RpcConnection) SetRequestExpireMillisecond(requestExpireMillisecond int64) {
+	this.requestExpireMillisecond = requestExpireMillisecond
 }
 
 func (this *RpcConnection) Call(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
@@ -186,6 +193,9 @@ func (this *RpcConnection) close(err error) {
 	if con != nil {
 		con.Close()
 	}
+
+	// 连接关闭时触发的对应事件
+	this.rpcWatcherObj.afterClose()
 
 	log.Debug("connection closed ip:%v", this.Addr())
 }

@@ -15,6 +15,8 @@ type RpcServer struct {
 	connDataLockObj  sync.RWMutex
 	getConvertorFunc func() IByteConvertor
 
+	// 心跳超时时间：单位：秒 默认20秒
+	connectionTimeoutSecond  int64
 	newConnectionHandlerData map[string]func(connObj RpcConnectioner) error
 }
 
@@ -76,25 +78,19 @@ func (this *RpcServer) onConnectionClose(connObj *RpcConnection4Server) {
 	delete(this.connData, connObj.ConnectionId())
 }
 
-func (this *RpcServer) Start(addr string) error {
-	defer log.Info("listen over Addr:%v", addr)
+func (this *RpcServer) GetConnectionCount() int {
+	return len(this.connData)
+}
 
+func (this *RpcServer) Start(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Error("listen error Addr:%v error:%v", addr, err.Error())
 		return err
 	}
 
-	for {
-		con, err := listener.Accept()
-		if err != nil {
-			log.Error("Accept Error Addr:%v error:%v", listener.Addr(), err.Error())
-			return err
-		}
-
-		rpcConnObj := NewRpcConnection4Server(con, this.ApiMgr, this.getConvertorFunc)
-		this.invokeNewConnectionHandler(rpcConnObj)
-	}
+	this.Start2(listener)
+	return nil
 }
 
 func (this *RpcServer) Start2(listener net.Listener) {
@@ -108,8 +104,14 @@ func (this *RpcServer) Start2(listener net.Listener) {
 		}
 
 		rpcConnObj := NewRpcConnection4Server(con, this.ApiMgr, this.getConvertorFunc)
+		rpcConnObj.SetConnectionTimeoutSecond(this.connectionTimeoutSecond)
 		this.invokeNewConnectionHandler(rpcConnObj)
 	}
+}
+
+// SetConnectionTimeoutSecond 设置连接超时时间（多久没有收到心跳就断开连接）
+func (this *RpcServer) SetConnectionTimeoutSecond(connectionTimeoutSecond int64) {
+	this.connectionTimeoutSecond = connectionTimeoutSecond
 }
 
 func NewRpcServer(getConvertorFunc func() IByteConvertor) *RpcServer {
@@ -119,6 +121,7 @@ func NewRpcServer(getConvertorFunc func() IByteConvertor) *RpcServer {
 		RpcWatchBase:             newRpcWatchBase(),
 		newConnectionHandlerData: make(map[string]func(connObj RpcConnectioner) error, 8),
 		getConvertorFunc:         getConvertorFunc,
+		connectionTimeoutSecond:  20,
 	}
 
 	return result

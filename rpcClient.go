@@ -63,6 +63,7 @@ func (this *RpcClient) Start(addr string, isAutoReconnect bool) error {
 	}
 
 	// 先尝试连接一次
+	log.Info("start reconnect to %v", addr)
 	if this.connect(this.isStopped, addr) {
 		return nil
 	}
@@ -127,6 +128,7 @@ func (this *RpcClient) reconnect(isStopped *bool) {
 
 	addr := this.addr
 	for *isStopped == false && this.isAutoReconnect { //// 地址有变更，则立即停止重连
+		log.Info("start reconnect to %v", addr)
 		if this.connect(isStopped, addr) {
 			break
 		}
@@ -138,7 +140,6 @@ func (this *RpcClient) reconnect(isStopped *bool) {
 
 // connect
 func (this *RpcClient) connect(isStopped *bool, addr string) bool {
-	log.Info("start connect to %v", addr)
 	con, err := net.Dial("tcp", addr)
 	if err != nil {
 		log.Info("fail to connect to server addr:%v error:%v", addr, err.Error())
@@ -175,7 +176,6 @@ func NewRpcClient(getConvertorFunc func() IByteConvertor) *RpcClient {
 	// 添加对自动重连的支持
 	result.AddCloseHandler("RpcClient.reconnect", func(conObj RpcConnectioner) {
 		if result.isAutoReconnect {
-
 			go result.reconnect(result.isStopped)
 		}
 
