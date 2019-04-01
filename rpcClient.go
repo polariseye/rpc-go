@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"net"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ type RpcClient struct {
 
 	isStopped            *bool //// 用指针是为了避免在调用Start时，正在进行重连
 	autoReconnectLockObj sync.Mutex
+	byteOrder            binary.ByteOrder
 }
 
 // 关闭连接
@@ -98,7 +100,7 @@ func (this *RpcClient) Start2(con net.Conn) error {
 	*this.isStopped = true
 	this.isStopped = new(bool)
 
-	conObj := newRpcConnection(this.ApiMgr, con, this, this.getConvertorFunc)
+	conObj := newRpcConnection(this.ApiMgr, con, this, this.byteOrder, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 
 	return nil
@@ -153,7 +155,7 @@ func (this *RpcClient) connect(isStopped *bool, addr string) bool {
 		con.Close()
 	}
 
-	conObj := newRpcConnection(this.ApiMgr, con, this, this.getConvertorFunc)
+	conObj := newRpcConnection(this.ApiMgr, con, this, this.byteOrder, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 	log.Info("connected to server:%v", addr)
 
@@ -162,13 +164,14 @@ func (this *RpcClient) connect(isStopped *bool, addr string) bool {
 
 // NewRpcClient 新建Rpc连接客户端对象
 // getConvertorFunc:转换对象获取函数（协议处理用）
-func NewRpcClient(getConvertorFunc func() IByteConvertor) *RpcClient {
+func NewRpcClient(byteOrder binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcClient {
 	result := &RpcClient{
 		ApiMgr:               newApiMgr(),
 		isAutoReconnect:      false,
 		isStopped:            new(bool),
 		getConvertorFunc:     getConvertorFunc,
 		RpcConnection4Client: NewRpcConnection4Client(),
+		byteOrder:            byteOrder,
 	}
 
 	*result.isStopped = true

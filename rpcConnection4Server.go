@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"net"
 	"time"
 
@@ -80,14 +81,14 @@ func (this *RpcConnection4Server) afterClose() {
 	this.invokeCloseHandler(this)
 }
 
-func NewRpcConnection4Server(con net.Conn, apiMgr *ApiMgr, getConvertorFunc func() IByteConvertor) *RpcConnection4Server {
+func NewRpcConnection4Server(con net.Conn, apiMgr *ApiMgr, order binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcConnection4Server {
 	result := &RpcConnection4Server{
 		RpcWatchBase:            newRpcWatchBase(),
 		connectionTimeoutSecond: 20,
 		preReceiveKeepAliveTime: time.Now().Unix(),
 	}
 
-	result.RpcConnection = newRpcConnection(apiMgr, con, result, getConvertorFunc)
+	result.RpcConnection = newRpcConnection(apiMgr, con, result, order, getConvertorFunc)
 
 	return result
 }

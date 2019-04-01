@@ -452,7 +452,7 @@ func (this *RpcConnection) ConnectionId() int64 {
 	return this.connectionId
 }
 
-func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, getConvertorFunc func() IByteConvertor) *RpcConnection {
+func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, order binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcConnection {
 	var result = &RpcConnection{
 		apiMgr:                   apiMgr,
 		frameContainer:           newFrameContainer(),
@@ -464,7 +464,7 @@ func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, getCo
 		rpcWatcherObj:            watcherObj,
 		requestId:                rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
 		connectionId:             getNextConnectionId(),
-		byteOrder:                binary.BigEndian,
+		byteOrder:                order,
 		getConvertorFunc:         getConvertorFunc,
 	}
 

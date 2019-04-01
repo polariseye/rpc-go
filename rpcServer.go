@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"encoding/binary"
 	"net"
 	"sync"
 
@@ -14,6 +15,7 @@ type RpcServer struct {
 	connData         map[int64]*RpcConnection4Server
 	connDataLockObj  sync.RWMutex
 	getConvertorFunc func() IByteConvertor
+	byteOrder        binary.ByteOrder
 
 	// 心跳超时时间：单位：秒 默认20秒
 	connectionTimeoutSecond  int64
@@ -103,7 +105,7 @@ func (this *RpcServer) Start2(listener net.Listener) {
 			return
 		}
 
-		rpcConnObj := NewRpcConnection4Server(con, this.ApiMgr, this.getConvertorFunc)
+		rpcConnObj := NewRpcConnection4Server(con, this.ApiMgr, this.byteOrder, this.getConvertorFunc)
 		rpcConnObj.SetConnectionTimeoutSecond(this.connectionTimeoutSecond)
 		this.invokeNewConnectionHandler(rpcConnObj)
 	}
@@ -114,7 +116,7 @@ func (this *RpcServer) SetConnectionTimeoutSecond(connectionTimeoutSecond int64)
 	this.connectionTimeoutSecond = connectionTimeoutSecond
 }
 
-func NewRpcServer(getConvertorFunc func() IByteConvertor) *RpcServer {
+func NewRpcServer(byteOrder binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcServer {
 	result := &RpcServer{
 		connData:                 make(map[int64]*RpcConnection4Server, 8),
 		ApiMgr:                   newApiMgr(),
@@ -122,6 +124,7 @@ func NewRpcServer(getConvertorFunc func() IByteConvertor) *RpcServer {
 		newConnectionHandlerData: make(map[string]func(connObj RpcConnectioner) error, 8),
 		getConvertorFunc:         getConvertorFunc,
 		connectionTimeoutSecond:  20,
+		byteOrder:                byteOrder,
 	}
 
 	return result
