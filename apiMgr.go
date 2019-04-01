@@ -60,7 +60,8 @@ func (this *ApiMgr) addRpcMethod(moduleName string, methodName string, methodTyp
 			continue
 		}
 
-		paramList = append(paramList, methodType.In(i))
+		tpItem := methodType.In(i)
+		paramList = append(paramList, tpItem)
 	}
 
 	// 获取返回

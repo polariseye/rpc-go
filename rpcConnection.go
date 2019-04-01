@@ -72,6 +72,10 @@ func (this *RpcConnection) Call(methodName string, requestObj []interface{}, res
 }
 
 func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}, responseObj []interface{}) (donChan <-chan error, err error) {
+	if this == nil {
+		return nil, io.EOF
+	}
+
 	var requestBytes []byte
 	if len(requestObj) > 0 {
 		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)
@@ -100,6 +104,10 @@ func (this *RpcConnection) CallAsync(methodName string, requestObj []interface{}
 }
 
 func (this *RpcConnection) CallAsyncWithNoResponse(methodName string, requestObj []interface{}, responseObj []interface{}) (err error) {
+	if this == nil {
+		return io.EOF
+	}
+
 	var requestBytes []byte
 	if len(requestObj) > 0 {
 		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)
@@ -139,6 +147,10 @@ func (this *RpcConnection) CallTimeout(methodName string, requestObj []interface
 }
 
 func (this *RpcConnection) CallAsyncTimeout(methodName string, requestObj []interface{}, responseObj []interface{}, expireMillisecond int64) (donChan <-chan error, err error) {
+	if this == nil {
+		return nil, io.EOF
+	}
+
 	var requestBytes []byte
 	if len(requestObj) > 0 {
 		requestBytes, err = this.getConvertorFunc().MarshalValue(requestObj...)

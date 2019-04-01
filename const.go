@@ -37,6 +37,8 @@ var (
 	MethodNotFoundError      = errors.New("MethodNotFound")
 	HandlerExistedError      = errors.New("HandlerExisted")
 	HaveConnectedError       = errors.New("HaveConnectedError")
+	NilError                 = errors.New("NilError")
+	NotSupportedTypeError    = errors.New("NotSupportedTypeError")
 )
 
 const (
