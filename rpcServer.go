@@ -52,8 +52,25 @@ func (this *RpcServer) invokeNewConnectionHandler(connObj *RpcConnection4Server)
 		return this.invokeAfterInvokeHandler(connObj, frameObj, returnList, err)
 	})
 
-	for _, item := range this.newConnectionHandlerData {
-		item(connObj)
+	// 触发新连接的事件
+	for handlerName, item := range this.newConnectionHandlerData {
+		err := item(connObj)
+		if err != nil {
+			log.Debug("connection be closed by handler:%v err:%v", handlerName, err.Error())
+
+			//// 提前关闭连接
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						log.Error("connection close panic err:%v", err.(error).Error())
+					}
+				}()
+
+				connObj.close(err)
+			}()
+
+			return
+		}
 	}
 
 	// 添加到连接集合中
