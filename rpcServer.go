@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/binary"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/polariseye/rpc-go/log"
@@ -44,11 +45,11 @@ func (this *RpcServer) invokeNewConnectionHandler(connObj *RpcConnection4Server)
 	connObj.AddSendScheduleHandler("RpcServer.SendScheduleHandler", func(connObj RpcConnectioner) {
 		this.invokeSendScheduleHandler(connObj)
 	})
-	connObj.AddBeforeHandleFrameHandler("RpcServer.BeforeHandleFrameHandler", func(connObj RpcConnectioner, frameObj *DataFrame) {
-		this.invokeBeforeHandleFrameHandler(connObj, frameObj)
+	connObj.AddBeforeHandleFrameHandler("RpcServer.BeforeHandleFrameHandler", func(connObj RpcConnectioner, frameObj *DataFrame) (isHandled bool, err error) {
+		return this.invokeBeforeHandleFrameHandler(connObj, frameObj)
 	})
-	connObj.AddAfterInvokeHandler("RpcServer.AfterInvokeHandler", func(connObj RpcConnectioner, returnBytes []byte, err error) {
-		this.invokeAfterInvokeHandler(connObj, returnBytes, err)
+	connObj.AddAfterInvokeHandler("RpcServer.AfterInvokeHandler", func(connObj RpcConnectioner, frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error) {
+		return this.invokeAfterInvokeHandler(connObj, frameObj, returnList, err)
 	})
 
 	for _, item := range this.newConnectionHandlerData {

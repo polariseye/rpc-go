@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/binary"
 	"net"
+	"reflect"
 	"time"
 
 	"github.com/polariseye/rpc-go/log"
@@ -63,9 +64,7 @@ func (this *RpcConnection4Server) beforeHandleFrame(frameObj *DataFrame) (isHand
 		return
 	}
 
-	this.invokeBeforeHandleFrameHandler(this, frameObj)
-
-	return
+	return this.invokeBeforeHandleFrameHandler(this, frameObj)
 }
 
 func (this *RpcConnection4Server) responseKeepAlive(frameObj *DataFrame) {
@@ -73,8 +72,8 @@ func (this *RpcConnection4Server) responseKeepAlive(frameObj *DataFrame) {
 	this.sendChan <- responseFrame
 }
 
-func (this *RpcConnection4Server) afterInvoke(frameObj *DataFrame, returnBytes []byte, err error) {
-	this.invokeAfterInvokeHandler(this, returnBytes, err)
+func (this *RpcConnection4Server) afterInvoke(frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error) {
+	return this.invokeAfterInvokeHandler(this, frameObj, returnList, err)
 }
 
 func (this *RpcConnection4Server) afterClose() {

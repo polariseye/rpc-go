@@ -418,9 +418,27 @@ func (this *RpcConnection) handleRequestFrame() {
 					continue
 				}
 
-				returnBytes, err := methodObj.Invoke(this, this.getConvertorFunc(), frameObj.Data, this.byteOrder, frameObj.IsNeedResponse())
-				this.rpcWatcherObj.afterInvoke(frameObj, returnBytes, err)
-				this.response(frameObj, returnBytes, err)
+				// 参数组装
+				convertorObj := this.getConvertorFunc()
+				paramList, err := methodObj.GetInvokeParamList(this, convertorObj, frameObj.Data)
+				if err != nil {
+					this.response(frameObj, nil, InnerDataError)
+					continue
+				}
+
+				// 接口调用
+				responseList, err := methodObj.Invoke(this, paramList)
+				responseList, err = this.rpcWatcherObj.afterInvoke(frameObj, responseList, err) //// 应答处理
+				if err != nil {
+					this.response(frameObj, nil, InnerDataError)
+					continue
+				}
+
+				// 应答
+				if frameObj.IsNeedResponse() {
+					bytesData, err := methodObj.GetResponseBytes(this, responseList, convertorObj)
+					this.response(frameObj, bytesData, err)
+				}
 			}
 		}
 	}

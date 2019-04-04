@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/polariseye/rpc-go/log"
 )
 
-var rpcObj = rpc.NewRpcClient(rpc.GetJsonConvertor)
+var rpcObj = rpc.NewRpcClient(binary.LittleEndian, rpc.GetJsonConvertor)
 
 func main() {
 	// 注册客户端的服务
@@ -18,9 +19,11 @@ func main() {
 		log.Debug("发送帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
 			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
 	})
-	rpcObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
+	rpcObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) (isHandled bool, err error) {
 		log.Debug("收到帧 Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
 			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
+
+		return
 	})
 
 	rpcObj.Start("127.0.0.1:50001", true)

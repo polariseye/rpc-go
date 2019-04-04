@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"reflect"
 	"time"
 
 	"github.com/polariseye/rpc-go/log"
@@ -49,12 +50,11 @@ func (this *RpcConnection4Client) beforeHandleFrame(frameObj *DataFrame) (isHand
 		return
 	}
 
-	this.invokeBeforeHandleFrameHandler(this, frameObj)
-	return false, nil
+	return this.invokeBeforeHandleFrameHandler(this, frameObj)
 }
 
-func (this *RpcConnection4Client) afterInvoke(frameObj *DataFrame, returnBytes []byte, err error) {
-	this.invokeAfterInvokeHandler(this, returnBytes, err)
+func (this *RpcConnection4Client) afterInvoke(frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error) {
+	return this.invokeAfterInvokeHandler(this, frameObj, returnList, err)
 }
 
 func (this *RpcConnection4Client) afterClose() {

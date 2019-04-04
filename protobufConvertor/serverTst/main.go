@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	protobufConvertor.InitDefaultConvertor(binary.BigEndian)
-	serverObj := rpc.NewRpcServer(protobufConvertor.GetProtobufConvertor)
+	protobufConvertor.InitDefaultConvertor(binary.LittleEndian)
+	serverObj := rpc.NewRpcServer(binary.LittleEndian, protobufConvertor.GetProtobufConvertor)
 
 	serverObj.RegisterFunc("global", "hello", func(connObj *rpc.RpcConnection, personObj1 *Person, personObj2 *Person) (*Person, *Person) {
 		personObj1.Id += 1

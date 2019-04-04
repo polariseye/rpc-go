@@ -1,10 +1,12 @@
 package rpc
 
+import "reflect"
+
 type RpcWatcher interface {
 	afterSend(frameObj *DataFrame) (err error)
 	sendSchedule() (err error)
 	beforeHandleFrame(frameObj *DataFrame) (isHandled bool, err error)
-	afterInvoke(frameObj *DataFrame, returnBytes []byte, err error)
+	afterInvoke(frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error)
 	afterClose()
 }
 
@@ -12,8 +14,8 @@ type RpcWatchBase struct {
 	afterSendHandlerData         map[string]func(connObj RpcConnectioner, frameObj *DataFrame)
 	closeHandlerData             map[string]func(connObj RpcConnectioner)
 	sendScheduleHandlerData      map[string]func(connObj RpcConnectioner)
-	beforeHandleFrameHandlerData map[string]func(connObj RpcConnectioner, frameObj *DataFrame)
-	afterInvokeHandlerData       map[string]func(connObj RpcConnectioner, returnBytes []byte, err error)
+	beforeHandleFrameHandlerData map[string]func(connObj RpcConnectioner, frameObj *DataFrame) (isHandled bool, err error)
+	afterInvokeHandlerData       map[string]func(connObj RpcConnectioner, frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error)
 }
 
 func (this *RpcWatchBase) AddCloseHandler(funcName string, funcObj func(connObj RpcConnectioner)) (err error) {
@@ -61,7 +63,7 @@ func (this *RpcWatchBase) invokeSendScheduleHandler(connObj RpcConnectioner) {
 	}
 }
 
-func (this *RpcWatchBase) AddBeforeHandleFrameHandler(funcName string, funcObj func(connObj RpcConnectioner, frameObj *DataFrame)) (err error) {
+func (this *RpcWatchBase) AddBeforeHandleFrameHandler(funcName string, funcObj func(connObj RpcConnectioner, frameObj *DataFrame) (isHandled bool, err error)) (err error) {
 	if _, exist := this.beforeHandleFrameHandlerData[funcName]; exist {
 		return HandlerExistedError
 	}
@@ -70,13 +72,18 @@ func (this *RpcWatchBase) AddBeforeHandleFrameHandler(funcName string, funcObj f
 	return nil
 }
 
-func (this *RpcWatchBase) invokeBeforeHandleFrameHandler(connObj RpcConnectioner, frameObj *DataFrame) {
+func (this *RpcWatchBase) invokeBeforeHandleFrameHandler(connObj RpcConnectioner, frameObj *DataFrame) (isHandled bool, err error) {
 	for _, item := range this.beforeHandleFrameHandlerData {
-		item(connObj, frameObj)
+		isHandled, err = item(connObj, frameObj)
+		if err != nil || isHandled {
+			return
+		}
 	}
+
+	return false, nil
 }
 
-func (this *RpcWatchBase) AddAfterInvokeHandler(funcName string, funcObj func(connObj RpcConnectioner, returnBytes []byte, err error)) (err error) {
+func (this *RpcWatchBase) AddAfterInvokeHandler(funcName string, funcObj func(connObj RpcConnectioner, frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error)) (err error) {
 	if _, exist := this.afterInvokeHandlerData[funcName]; exist {
 		return HandlerExistedError
 	}
@@ -85,10 +92,12 @@ func (this *RpcWatchBase) AddAfterInvokeHandler(funcName string, funcObj func(co
 	return nil
 }
 
-func (this *RpcWatchBase) invokeAfterInvokeHandler(connObj RpcConnectioner, returnBytes []byte, err error) {
+func (this *RpcWatchBase) invokeAfterInvokeHandler(connObj RpcConnectioner, frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error) {
 	for _, item := range this.afterInvokeHandlerData {
-		item(connObj, returnBytes, err)
+		returnList, err = item(connObj, frameObj, returnList, err)
 	}
+
+	return returnList, err
 }
 
 func newRpcWatchBase() *RpcWatchBase {
@@ -96,7 +105,7 @@ func newRpcWatchBase() *RpcWatchBase {
 		afterSendHandlerData:         make(map[string]func(connObj RpcConnectioner, frameObj *DataFrame), 4),
 		closeHandlerData:             make(map[string]func(connObj RpcConnectioner), 4),
 		sendScheduleHandlerData:      make(map[string]func(connObj RpcConnectioner), 4),
-		beforeHandleFrameHandlerData: make(map[string]func(connObj RpcConnectioner, frameObj *DataFrame), 4),
-		afterInvokeHandlerData:       make(map[string]func(connObj RpcConnectioner, returnBytes []byte, err error), 4),
+		beforeHandleFrameHandlerData: make(map[string]func(connObj RpcConnectioner, frameObj *DataFrame) (isHandled bool, err error), 4),
+		afterInvokeHandlerData:       make(map[string]func(connObj RpcConnectioner, frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error), 4),
 	}
 }

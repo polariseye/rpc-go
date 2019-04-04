@@ -39,6 +39,7 @@ var (
 	HaveConnectedError       = errors.New("HaveConnectedError")
 	NilError                 = errors.New("NilError")
 	NotSupportedTypeError    = errors.New("NotSupportedTypeError")
+	InnerDataError           = errors.New("InnerDataError")
 )
 
 const (

@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	protobufConvertor.InitDefaultConvertor(binary.BigEndian)
-	rpcClientObj := rpc.NewRpcClient(protobufConvertor.GetProtobufConvertor)
+	protobufConvertor.InitDefaultConvertor(binary.LittleEndian)
+	rpcClientObj := rpc.NewRpcClient(binary.LittleEndian, protobufConvertor.GetProtobufConvertor)
 
 	err := rpcClientObj.Start("127.0.0.1:10001", true)
 	if err != nil {

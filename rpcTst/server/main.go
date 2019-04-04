@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/polariseye/rpc-go/log"
 )
 
-var rpcServerObj = rpc.NewRpcServer(rpc.GetJsonConvertor)
+var rpcServerObj = rpc.NewRpcServer(binary.LittleEndian, rpc.GetJsonConvertor)
 
 func Hello(connObj *rpc.RpcConnection, name string) (say string, err error) {
 	return fmt.Sprintf("你好哈:%v", name), nil
@@ -20,9 +21,11 @@ func main() {
 
 	rpcServerObj.RecordAllMethod()
 
-	rpcServerObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) {
+	rpcServerObj.AddBeforeHandleFrameHandler("main", func(connObj rpc.RpcConnectioner, frameObj *rpc.DataFrame) (isHandled bool, err error) {
 		log.Debug("Frame: RequestId:%d ResponseFrameId:%d ContentLength:%d TransformType:0X%x MethodName:%s",
 			frameObj.RequestFrameId, frameObj.ResponseFrameId, frameObj.ContentLength, frameObj.TransformType(), frameObj.MethodName())
+
+		return
 	})
 
 	go func() {

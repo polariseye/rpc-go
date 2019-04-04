@@ -23,7 +23,7 @@ func ValueTst() {
 		Phones: []string{"12", "22"},
 	})
 
-	protobufConvertor.InitDefaultConvertor(binary.BigEndian)
+	protobufConvertor.InitDefaultConvertor(binary.LittleEndian)
 	convertorObj := protobufConvertor.GetProtobufConvertor()
 	data, err := convertorObj.MarshalValue(pList...)
 	if err != nil {
