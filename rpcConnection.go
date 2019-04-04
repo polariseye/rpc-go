@@ -24,6 +24,7 @@ type RpcConnectioner interface {
 	Conn() net.Conn
 	Addr() string
 	IsClosed() bool
+	ConnectionId() int64
 }
 
 // 连接Id，用于为每个连接分配一个唯一Id
