@@ -21,16 +21,16 @@ func (this *ProtobufConvertor) MarshalValue(valList ...interface{}) ([]byte, err
 	var lensBytes = make([]byte, 4)
 	byteData := make([]byte, 0, 2040)
 	for _, item := range valList {
-		if item == nil {
-			return nil, rpc.NilError //// 不能为nil，否则不好解析
+		if rpc.IsNil(item) {
+			len0 := uint32(0)
+			this.byteOrder.PutUint32(lensBytes, len0)
+			byteData = append(byteData, lensBytes...)
+			continue
 		}
 
 		pbItem, ok := item.(Protobuffer)
 		if ok == false {
 			return nil, rpc.NotSupportedTypeError
-		}
-		if pbItem == nil {
-			return nil, rpc.NilError //// 不能为nil，否则不好解析
 		}
 
 		var dataLen uint32 = 0
@@ -93,12 +93,16 @@ func (this *ProtobufConvertor) UnMarhsalValue(bytesData []byte, valList ...inter
 	var dataLen uint32
 	for _, valItem := range valList {
 		dataLen = this.byteOrder.Uint32(bytesData[handledLen : handledLen+4])
+		handledLen += 4
+		if dataLen == 0 {
+			// 如果没有数据，则跳过这项
+			continue
+		}
+
 		pbItem, ok := valItem.(Protobuffer)
 		if ok == false {
 			return rpc.NotSupportedTypeError
 		}
-
-		handledLen += 4
 
 		err := pbItem.Unmarshal(bytesData[handledLen : handledLen+dataLen])
 		if err != nil {

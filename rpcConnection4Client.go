@@ -13,6 +13,8 @@ type RpcConnection4Client struct {
 
 	keepAliveInterval    int64 //// 单位：秒 默认5秒
 	preSendKeepAliveTime int64
+
+	connectionedHandlerData map[string]func(connObj RpcConnectioner)
 }
 
 func (this *RpcConnection4Client) afterSend(frameObj *DataFrame) (err error) {
@@ -62,6 +64,9 @@ func (this *RpcConnection4Client) afterClose() {
 }
 func (this *RpcConnection4Client) setConnection(con *RpcConnection) {
 	this.RpcConnection = con
+
+	// 触发连接事件
+	this.invokeConnectedHandler(con)
 }
 
 func (this *RpcConnection4Client) IsClosed() bool {
@@ -72,10 +77,26 @@ func (this *RpcConnection4Client) IsClosed() bool {
 	return this.RpcConnection.IsClosed()
 }
 
+func (this *RpcConnection4Client) AddConnectedHandler(funcName string, funcObj func(connObj RpcConnectioner)) (err error) {
+	if _, exist := this.connectionedHandlerData[funcName]; exist {
+		return HandlerExistedError
+	}
+
+	this.connectionedHandlerData[funcName] = funcObj
+	return nil
+}
+
+func (this *RpcConnection4Client) invokeConnectedHandler(connObj RpcConnectioner) {
+	for _, item := range this.connectionedHandlerData {
+		item(connObj)
+	}
+}
+
 func NewRpcConnection4Client() *RpcConnection4Client {
 	result := &RpcConnection4Client{
-		RpcWatchBase:      newRpcWatchBase(),
-		keepAliveInterval: 5,
+		RpcWatchBase:            newRpcWatchBase(),
+		keepAliveInterval:       5,
+		connectionedHandlerData: make(map[string]func(connObj RpcConnectioner), 4),
 	}
 
 	return result

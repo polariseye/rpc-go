@@ -200,7 +200,11 @@ func (this *RpcConnection) close(err error) {
 	this.requestChan <- nil
 
 	// 清空所有请求
-	this.frameContainer.ReturnAllRequest(err)
+	if err == nil {
+		this.frameContainer.ReturnAllRequest(ConnectionClosedError)
+	} else {
+		this.frameContainer.ReturnAllRequest(err)
+	}
 
 	con := this.con
 	if con != nil {
@@ -224,7 +228,11 @@ func (this *RpcConnection) Addr() string {
 func (this *RpcConnection) receive() {
 	var err error
 	defer this.closeWaitGroup.Done()
-	defer this.close(err)
+	defer func() {
+		if err != nil {
+			this.close(err)
+		}
+	}()
 
 	var header = make([]byte, HEADER_LENGTH)
 	var isHandled bool
@@ -326,7 +334,11 @@ func (this *RpcConnection) send() {
 		}
 	}()
 	var err error
-	defer this.close(err)
+	defer func() {
+		if err != nil {
+			this.close(err)
+		}
+	}()
 
 	for this.isClosed == No {
 		select {

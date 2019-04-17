@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/polariseye/rpc-go/log"
 )
@@ -134,10 +133,7 @@ func (this *RpcClient) reconnect(isStopped *bool) {
 		if this.connect(isStopped, addr) {
 			break
 		}
-
-		time.Sleep(5 * time.Second)
 	}
-
 }
 
 // connect

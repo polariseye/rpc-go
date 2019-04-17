@@ -40,6 +40,7 @@ var (
 	NilError                 = errors.New("NilError")
 	NotSupportedTypeError    = errors.New("NotSupportedTypeError")
 	InnerDataError           = errors.New("InnerDataError")
+	ConnectionClosedError    = errors.New("ConnectionClosedError")
 )
 
 const (
