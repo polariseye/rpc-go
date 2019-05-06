@@ -24,19 +24,15 @@ func (this *RpcConnection4Client) afterSend(frameObj *DataFrame) (err error) {
 
 func (this *RpcConnection4Client) sendSchedule() (err error) {
 	now := time.Now().Unix()
+	connObj := this.RpcConnection
 
 	// 心跳发送
-	if (now - this.preSendKeepAliveTime) > this.keepAliveInterval {
-		frameObj := newRequestFrame(nil, "", nil, this.getRequestId(), true)
+	if connObj != nil && (now-this.preSendKeepAliveTime) > this.keepAliveInterval {
+		frameObj := newRequestFrame(nil, "", nil, connObj.getRequestId(), true)
 		frameObj.SetTransformType(TransformType_KeepAlive)
 
-		bytesData := frameObj.GetHeader(this.byteOrder)
-		_, err := this.con.Write(bytesData)
-		if err != nil {
-			log.Error("send data error:%v", err.Error())
-			return err
-		}
-
+		this.directlySendFrame(frameObj)
+		//// 此处不管是否报错，都需要加心跳，以避免一直发不停心跳
 		this.preSendKeepAliveTime = now
 	}
 

@@ -14,7 +14,7 @@ type MethodInfo struct {
 }
 
 // 获取接口调用的参数
-func (this *MethodInfo) GetInvokeParamList(connObj *RpcConnection, convertor IByteConvertor, data []byte) ([]reflect.Value, error) {
+func (this *MethodInfo) GetInvokeParamList(connObj RpcConnectioner, convertor IByteConvertor, data []byte) ([]reflect.Value, error) {
 	var valList []reflect.Value
 	if len(this.funcParamList) > 1 {
 		var err error
@@ -36,7 +36,7 @@ func (this *MethodInfo) GetInvokeParamList(connObj *RpcConnection, convertor IBy
 }
 
 // 接口调用
-func (this *MethodInfo) Invoke(connObj *RpcConnection, paramList []reflect.Value) (responseValue []reflect.Value, err error) {
+func (this *MethodInfo) Invoke(connObj RpcConnectioner, paramList []reflect.Value) (responseValue []reflect.Value, err error) {
 	defer func() {
 		if tmpErr := recover(); tmpErr != nil {
 			err = tmpErr.(error)

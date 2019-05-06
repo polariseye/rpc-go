@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -44,6 +45,7 @@ type RpcConnection struct {
 	sendChan         chan *DataFrame       //// 帧发送队列
 	requestChan      chan *DataFrame       //// 请求发送帧
 	rpcWatcherObj    RpcWatcher            //// 连接具体处理
+	connectionDetail RpcConnectioner       //// 具体连接处理对象
 	byteOrder        binary.ByteOrder      //// 数据的字节序
 	getConvertorFunc func() IByteConvertor //// 数据转换对象获取
 
@@ -343,25 +345,8 @@ func (this *RpcConnection) send() {
 	for this.isClosed == No {
 		select {
 		case item := <-this.sendChan:
-			_, err = this.con.Write(item.GetHeader(this.byteOrder))
-			if err != nil {
+			if err = this.directlySendFrame(item); err != nil {
 				break
-			}
-
-			if item.MethodNameLen > 0 {
-				_, err = this.con.Write(item.MethodNameBytes)
-				if err != nil {
-					// 当前包的异常处理
-					break
-				}
-			}
-
-			if item.ContentLength > 0 {
-				_, err = this.con.Write(item.Data)
-				if err != nil {
-					// 当前包的异常处理
-					break
-				}
 			}
 
 			// 每次发送数据后调用的接口
@@ -432,7 +417,7 @@ func (this *RpcConnection) handleRequestFrame() {
 
 				// 参数组装
 				convertorObj := this.getConvertorFunc()
-				paramList, err := methodObj.GetInvokeParamList(this, convertorObj, frameObj.Data)
+				paramList, err := methodObj.GetInvokeParamList(this.connectionDetail, convertorObj, frameObj.Data)
 				if err != nil {
 					this.response(frameObj, nil, InnerDataError)
 					continue
@@ -483,7 +468,53 @@ func (this *RpcConnection) ConnectionId() int64 {
 	return this.connectionId
 }
 
-func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, order binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcConnection {
+// 发送一个帧到缓存队列
+func (this *RpcConnection) sendFrame(frameObj *DataFrame) error {
+	if this == nil {
+		log.Debug("connection closed but send frame flag:%v methodname:%v", frameObj.Flag, frameObj.MethodName())
+		return fmt.Errorf("connection closed")
+	}
+
+	this.sendChan <- frameObj
+
+	return nil
+}
+
+// 直接发送一个帧，不会缓存
+func (this *RpcConnection) directlySendFrame(frameObj *DataFrame) error {
+	conObj := this.con
+	if conObj == nil {
+		return fmt.Errorf("have no connection")
+	}
+
+	_, err := conObj.Write(frameObj.GetHeader(this.byteOrder))
+	if err != nil {
+		log.Debug("write to connection error:%v", err.Error())
+		return err
+	}
+
+	if frameObj.MethodNameLen > 0 {
+		_, err = conObj.Write(frameObj.MethodNameBytes)
+		if err != nil {
+			// 当前包的异常处理
+			log.Debug("write to connection error:%v", err.Error())
+			return err
+		}
+	}
+
+	if frameObj.ContentLength > 0 {
+		_, err = conObj.Write(frameObj.Data)
+		if err != nil {
+			// 当前包的异常处理
+			log.Debug("write to connection error:%v", err.Error())
+			return err
+		}
+	}
+
+	return nil
+}
+
+func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, connectionDetail RpcConnectioner, order binary.ByteOrder, getConvertorFunc func() IByteConvertor) *RpcConnection {
 	var result = &RpcConnection{
 		apiMgr:                   apiMgr,
 		frameContainer:           newFrameContainer(),
@@ -496,6 +527,7 @@ func newRpcConnection(apiMgr *ApiMgr, con net.Conn, watcherObj RpcWatcher, order
 		requestId:                rand.New(rand.NewSource(time.Now().Unix())).Uint32(), //// 产生一个随机数
 		connectionId:             getNextConnectionId(),
 		byteOrder:                order,
+		connectionDetail:         connectionDetail,
 		getConvertorFunc:         getConvertorFunc,
 	}
 

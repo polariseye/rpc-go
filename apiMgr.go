@@ -71,7 +71,7 @@ func (this *ApiMgr) addRpcMethod(moduleName string, methodName string, methodTyp
 	}
 
 	// 第一个必须是连接对象类型的
-	if len(paramList) <= 0 || paramList[0] != RpcConnectionType {
+	if len(paramList) <= 0 || paramList[0] != RpcConnectionerType {
 		return fmt.Errorf("Param invalid ModuleName:%s MethodName:%s", moduleName, methodName)
 	}
 

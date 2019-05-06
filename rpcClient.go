@@ -99,7 +99,7 @@ func (this *RpcClient) Start2(con net.Conn) error {
 	*this.isStopped = true
 	this.isStopped = new(bool)
 
-	conObj := newRpcConnection(this.ApiMgr, con, this, this.byteOrder, this.getConvertorFunc)
+	conObj := newRpcConnection(this.ApiMgr, con, this, this, this.byteOrder, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 
 	return nil
@@ -140,7 +140,7 @@ func (this *RpcClient) reconnect(isStopped *bool) {
 func (this *RpcClient) connect(isStopped *bool, addr string) bool {
 	con, err := net.Dial("tcp", addr)
 	if err != nil {
-		log.Info("fail to connect to server addr:%v error:%v", addr, err.Error())
+		log.Error("fail to connect to server addr:%v error:%v", addr, err.Error())
 		return false
 	}
 
@@ -151,7 +151,7 @@ func (this *RpcClient) connect(isStopped *bool, addr string) bool {
 		con.Close()
 	}
 
-	conObj := newRpcConnection(this.ApiMgr, con, this, this.byteOrder, this.getConvertorFunc)
+	conObj := newRpcConnection(this.ApiMgr, con, this, this, this.byteOrder, this.getConvertorFunc)
 	this.RpcConnection4Client.setConnection(conObj)
 	log.Info("connected to server:%v", addr)
 

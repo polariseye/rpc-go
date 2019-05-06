@@ -11,7 +11,7 @@ import (
 
 var rpcServerObj = rpc.NewRpcServer(binary.LittleEndian, rpc.GetJsonConvertor)
 
-func Hello(connObj *rpc.RpcConnection, name string) (say string, err error) {
+func Hello(connObj rpc.RpcConnectioner, name string) (say string, err error) {
 	return fmt.Sprintf("你好哈:%v", name), nil
 }
 

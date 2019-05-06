@@ -68,8 +68,14 @@ func (this *RpcConnection4Server) beforeHandleFrame(frameObj *DataFrame) (isHand
 }
 
 func (this *RpcConnection4Server) responseKeepAlive(frameObj *DataFrame) {
-	responseFrame := newResponseFrame(frameObj, nil, this.getRequestId())
-	this.sendChan <- responseFrame
+	// 必需先获取，再判断，因为断连时，会把连接置空
+	connObj := this.RpcConnection
+	if connObj == nil {
+		log.Info("connection is null,can not response keepalive")
+		return
+	}
+
+	connObj.sendFrame(newResponseFrame(frameObj, nil, connObj.getRequestId()))
 }
 
 func (this *RpcConnection4Server) afterInvoke(frameObj *DataFrame, returnList []reflect.Value, err error) (resultReturnList []reflect.Value, resultErr error) {
@@ -87,7 +93,7 @@ func NewRpcConnection4Server(con net.Conn, apiMgr *ApiMgr, order binary.ByteOrde
 		preReceiveKeepAliveTime: time.Now().Unix(),
 	}
 
-	result.RpcConnection = newRpcConnection(apiMgr, con, result, order, getConvertorFunc)
+	result.RpcConnection = newRpcConnection(apiMgr, con, result, result, order, getConvertorFunc)
 
 	return result
 }

@@ -12,7 +12,7 @@ func main() {
 	protobufConvertor.InitDefaultConvertor(binary.LittleEndian)
 	serverObj := rpc.NewRpcServer(binary.LittleEndian, protobufConvertor.GetProtobufConvertor)
 
-	serverObj.RegisterFunc("global", "hello", func(connObj *rpc.RpcConnection, personObj1 *Person, personObj2 *Person) (*Person, *Person) {
+	serverObj.RegisterFunc("global", "hello", func(connObj rpc.RpcConnectioner, personObj1 *Person, personObj2 *Person) (*Person, *Person) {
 		personObj1.Id += 1
 		personObj1.Name += "_____"
 		personObj1.Phones = append(personObj1.Phones, "33")
